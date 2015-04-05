@@ -1,0 +1,6 @@
+package baidu.hi;
+
+message hi_tel_num_list
+{
+	repeated	uint64 tel_num = 1;	// tel num array
+}
