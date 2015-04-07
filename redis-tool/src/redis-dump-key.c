@@ -12,7 +12,7 @@
 int main(int argc, char** argv)
 {
     if (argc < 6) {
-        FATAL("Right usage: dbprint ip port password db_id key");
+        FATAL("Right usage: ./redis-dump-key ip port password db_id key");
         return -1;
     }
 

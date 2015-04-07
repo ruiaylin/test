@@ -134,48 +134,6 @@ long long get_list_size(redis_instance* inst, char* list, size_t len)
     return num;
 }
 
-long long get_set_size(redis_instance* inst, char* set, size_t len)
-{
-    long long num = 0;
-    redisReply* reply = (redisReply*)redisCommand(inst->cxt, "scard %b", set, len);
-    assert(reply != NULL);
-    assert(reply->type == REDIS_REPLY_INTEGER);
-
-    num = reply->integer;
-
-    freeReplyObject(reply);
-
-    return num;
-}
-
-long long get_sset_size(redis_instance* inst, char* sset, size_t len)
-{
-    long long num = 0;
-    redisReply* reply = (redisReply*)redisCommand(inst->cxt, "zcard %b", sset, len);
-    assert(reply != NULL);
-    assert(reply->type == REDIS_REPLY_INTEGER);
-
-    num = reply->integer;
-
-    freeReplyObject(reply);
-
-    return num;
-}
-
-long long get_hashtable_size(redis_instance* inst, char* hash, size_t len)
-{
-    long long num = 0;
-    redisReply* reply = (redisReply*)redisCommand(inst->cxt, "hlen %b", hash, len);
-    assert(reply != NULL);
-    assert(reply->type == REDIS_REPLY_INTEGER);
-
-    num = reply->integer;
-
-    freeReplyObject(reply);
-
-    return num;
-}
-
 void print_list(redis_instance* inst, char* list, size_t len)
 {
     long index = 0;
@@ -195,7 +153,7 @@ void print_list(redis_instance* inst, char* list, size_t len)
             assert(reply1 != NULL);
             assert(reply1->len != 0);
 
-            pline("    [cursor:%ld, key:%s],", index++, reply1->str);
+            printf("\n    [cursor:%ld, key:%s],", index++, reply1->str);
         }
 
         if (reply->elements < SCAN_INC) {
@@ -205,6 +163,54 @@ void print_list(redis_instance* inst, char* list, size_t len)
 
         freeReplyObject(reply);
     } while(1);
+}
+
+void migrate_list(redis_instance* src, redis_instance* dst, char* list, size_t len)
+{
+    long index = 0;
+    do {
+        redisReply* reply = (redisReply*)redisCommand(
+                    src->cxt, "lrange %b %lld %lld",
+                    list, len, index, index + SCAN_INC - 1);
+        assert(reply != NULL);
+        assert(reply->type == REDIS_REPLY_ARRAY);
+        if (0 == reply->elements) {
+            break;
+        }
+
+        redisReply* reply1;
+        redisReply* reply2;
+        for (size_t i = 0; i < reply->elements; i++)  {
+            reply1 = reply->element[i];
+            assert(reply1 != NULL);
+            assert(reply1->len != 0);
+            reply2 = (redisReply*)redisCommand(dst->cxt, "rpush %b %b",
+                        list, len, reply1->str, (size_t)(reply1->len));
+            assert(reply2 != NULL);
+            freeReplyObject(reply2);
+        }
+
+        if (reply->elements < SCAN_INC) {
+            freeReplyObject(reply);
+            break;
+        }
+
+        freeReplyObject(reply);
+    } while(1);
+}
+
+long long get_set_size(redis_instance* inst, char* set, size_t len)
+{
+    long long num = 0;
+    redisReply* reply = (redisReply*)redisCommand(inst->cxt, "scard %b", set, len);
+    assert(reply != NULL);
+    assert(reply->type == REDIS_REPLY_INTEGER);
+
+    num = reply->integer;
+
+    freeReplyObject(reply);
+
+    return num;
 }
 
 void print_set(redis_instance* inst, char* set, size_t len)
@@ -226,12 +232,56 @@ void print_set(redis_instance* inst, char* set, size_t len)
         redisReply *keys = reply->element[1];
         for (size_t i = 0; i < keys->elements; i++)  {
             key = keys->element[i]->str;
-            pline("    [cursor:%ld, key:%s],", index++, key);
+            printf("\n    [cursor:%ld, key:%s],", index++, key);
         }
 
         cursor = strtoll(reply->element[0]->str, (char**)NULL, 10);
         freeReplyObject(reply);
     } while(cursor != 0);
+}
+
+void migrate_set(redis_instance* src, redis_instance* dst, char* set, size_t len)
+{
+    long long cursor = 0;
+    redisReply* keys;
+    do {
+        redisReply* reply = (redisReply*)redisCommand(
+                    src->cxt, "sscan %b %lld count %lld",
+                    set, len, cursor, SCAN_INC);
+        assert(reply != NULL);
+        assert(reply->type == REDIS_REPLY_ARRAY);
+        assert(2 == reply->elements);
+        assert(REDIS_REPLY_STRING == reply->element[0]->type);
+        assert(REDIS_REPLY_ARRAY == reply->element[1]->type);
+
+        redisReply* reply1;
+        redisReply *keys = reply->element[1];
+        for (size_t i = 0; i < keys->elements; i++)  {
+            reply1 = (redisReply*)redisCommand(dst->cxt, "sadd %b %b",
+                     set, len,
+                     keys->element[i]->str,
+                     (size_t)(keys->element[i]->len));
+            assert(reply1 != NULL);
+            freeReplyObject(reply1);
+        }
+
+        cursor = strtoll(reply->element[0]->str, (char**)NULL, 10);
+        freeReplyObject(reply);
+    } while(cursor != 0);
+}
+
+long long get_sset_size(redis_instance* inst, char* sset, size_t len)
+{
+    long long num = 0;
+    redisReply* reply = (redisReply*)redisCommand(inst->cxt, "zcard %b", sset, len);
+    assert(reply != NULL);
+    assert(reply->type == REDIS_REPLY_INTEGER);
+
+    num = reply->integer;
+
+    freeReplyObject(reply);
+
+    return num;
 }
 
 void print_sset(redis_instance* inst, char* sset, size_t len)
@@ -264,13 +314,70 @@ void print_sset(redis_instance* inst, char* sset, size_t len)
 
         redisReply *keys = reply->element[1];
         for (size_t i = 0; i < keys->elements; i+=2)  {
-            pline("    [cursor:%u, key:%s, value:%s],",
-                  index++, keys->element[i]->str, keys->element[i + 1]->str);
+            printf("\n    [cursor:%u, key:%s, value:%s],",
+                   index++, keys->element[i]->str, keys->element[i + 1]->str);
         }
 
         cursor = strtoll(reply->element[0]->str, (char**)NULL, 10);
         freeReplyObject(reply);
     } while(cursor != 0);
+}
+
+void migrate_sset(redis_instance* src, redis_instance* dst, char* sset, size_t len)
+{
+    /*
+    kv = (redisReply*)redisCommand(src->cxt, "zrange %s 0 -1 withscores", key);
+    assert (kv != NULL);
+    assert(kv->type == REDIS_REPLY_ARRAY);
+    assert(kv->elements != 0);
+
+    pline("{idx:%lu, sset:%s, member-score num:%lu,", index++, key, kv->elements);
+    for (unsigned j = 0; j < kv->elements; j += 2) {
+    pline("    {idx:%u, member:%s, score:%s},", j, kv->element[i]->str, kv->element[i + 1]->str);
+    }
+    pline("}\n");
+    freeReplyObject(kv);
+    */
+    long long cursor = 0;
+    redisReply* keys;
+    do {
+        redisReply* reply = (redisReply*)redisCommand(
+                    src->cxt, "zscan %b %lld count %lld",
+                    sset, len, cursor, SCAN_INC);
+        assert(reply != NULL);
+        assert(reply->type == REDIS_REPLY_ARRAY);
+        assert(2 == reply->elements);
+        assert(REDIS_REPLY_STRING == reply->element[0]->type);
+        assert(REDIS_REPLY_ARRAY == reply->element[1]->type);
+
+        redisReply* reply1;
+        redisReply *keys = reply->element[1];
+        for (size_t i = 0; i < keys->elements; i+=2)  {
+            reply1 = (redisReply*)redisCommand(dst->cxt, "zadd %b %b %b",
+                        sset, len,
+                        keys->element[i + 1]->str, (size_t)(keys->element[i + 1]->len),
+                        keys->element[i]->str, (size_t)(keys->element[i]->len));
+            assert(reply1 != NULL);
+            freeReplyObject(reply1);
+        }
+
+        cursor = strtoll(reply->element[0]->str, (char**)NULL, 10);
+        freeReplyObject(reply);
+    } while(cursor != 0);
+}
+
+long long get_hashtable_size(redis_instance* inst, char* hash, size_t len)
+{
+    long long num = 0;
+    redisReply* reply = (redisReply*)redisCommand(inst->cxt, "hlen %b", hash, len);
+    assert(reply != NULL);
+    assert(reply->type == REDIS_REPLY_INTEGER);
+
+    num = reply->integer;
+
+    freeReplyObject(reply);
+
+    return num;
 }
 
 void print_hashtable(redis_instance* inst, char* hash, long long len)
@@ -304,8 +411,52 @@ void print_hashtable(redis_instance* inst, char* hash, long long len)
 
         redisReply *keys = reply->element[1];
         for (size_t i = 0; i < keys->elements; i+=2)  {
-            pline("    [cursor:%ld, key:%s, value:%s],",
+            printf("\n    [cursor:%ld, key:%s, value:%s],",
                         index++, keys->element[i]->str, keys->element[i+1]->str);
+        }
+
+        cursor = strtoll(reply->element[0]->str, (char**)NULL, 10);
+        freeReplyObject(reply);
+    } while(cursor != 0);
+}
+
+void migrate_hashtable(redis_instance* src, redis_instance* dst, char* hash, long long len)
+{
+    /*
+       kv = (redisReply*)redisCommand(src->cxt, "hgetall %s", key);
+       assert (kv != NULL);
+       assert(kv->type == REDIS_REPLY_ARRAY);
+       assert(kv->elements != 0);
+
+       pline("{idx:%lu, hashtable:%s, kv num:%lu,", idx, key, kv->elements);
+       for (unsigned j = 0; j < kv->elements; j += 2) {
+       pline("    {idx:%u, key:%s, value:%s},", j, kv->element[i]->str, kv->element[i + 1]->str);
+       }
+       pline("}\n");
+       freeReplyObject(kv);
+
+     */
+    long long cursor = 0;
+    redisReply* keys;
+    do {
+        redisReply* reply = (redisReply*)redisCommand(
+                    src->cxt, "hscan %b %lld count %lld",
+                    hash, (size_t)(len), cursor, SCAN_INC);
+        assert(reply != NULL);
+        assert(reply->type == REDIS_REPLY_ARRAY);
+        assert(2 == reply->elements);
+        assert(REDIS_REPLY_STRING == reply->element[0]->type);
+        assert(REDIS_REPLY_ARRAY == reply->element[1]->type);
+
+        redisReply* reply1;
+        redisReply* keys = reply->element[1];
+        for (size_t i = 0; i < keys->elements; i+=2)  {
+            reply1 = (redisReply*)redisCommand(dst->cxt, "hset %b %b %b",
+                        hash, len,
+                        keys->element[i]->str, (size_t)(keys->element[i]->len),
+                        keys->element[i + 1]->str, (size_t)(keys->element[i + 1]->len));
+            assert(reply1 != NULL);
+            freeReplyObject(reply1);
         }
 
         cursor = strtoll(reply->element[0]->str, (char**)NULL, 10);
@@ -318,61 +469,114 @@ void print_key(redis_instance* inst, char* key, size_t len)
     long long size = 0;
     int flag = get_key_type(inst, key, len);
     long long pttl = get_key_pttl(inst, key, len);
+    printf("{key:%s, type:%s, pttl:%lldms, db:%lu,",
+            key, type_name[flag], pttl, inst->db);
     switch (flag) {
         case KSTRING: {
-            redisReply* kv = (redisReply*)redisCommand(
-                        inst->cxt, "get %b", key, len);
-            assert (kv != NULL);
+            redisReply* kv = (redisReply*)redisCommand(inst->cxt, "get %b", key, len);
+            assert(kv != NULL);
             assert(kv->type == REDIS_REPLY_STRING);
             assert(kv->len != 0);
-
-            pline("{key:%s, pttl:%lldms, type:string, db:%u, value:%s}",
-                   key, pttl, inst->db, kv->str);
+            pline(" value:%s}", kv->str);
             freeReplyObject(kv);
         }
         break;
 
         case KHASH: {
             size = get_hashtable_size(inst, key, len);
-            pline("{key:%s, pttl:%lldms, type:hashtable, size:%lld, db:%lu,\n  kvs:[",
-                  key, pttl, size, inst->db);
+            printf(" size:%lld", size);
             if (size) {
+                printf(",\n  kvs:[");
                 print_hashtable(inst, key, len);
+                pline("\b \n  ]");
             }
-            pline("  ]\n}");
+            pline("}");
         }
         break;
 
         case KLIST: {
             size = get_list_size(inst, key, len);
-            pline("{key:%s, pttl:%lldms, type:list, size:%lld, db:%lu,\n  keys:[",
-                  key, pttl, size, inst->db);
+            printf(" size:%lld", size);
             if (size) {
+                printf(",\n  values:[");
                 print_list(inst, key, len);
+                pline("\b \n  ]");
             }
-            pline("  ]\n}");
+            pline("}");
         }
         break;
 
         case KSET: {
             size = get_set_size(inst, key, len);
-            pline("{key:%s, pttl:%lldms, type:set, size:%lld, db:%lu,\n  keys:[",
-                  key, pttl, size, inst->db);
+            printf(" size:%lld", size);
             if (size) {
+                printf(",\n  values:[");
                 print_set(inst, key, len);
+                pline("\b \n  ]");
             }
-            pline("  ]\n}");
+            pline("}");
         }
         break;
 
         case KSSET: {
             size = get_sset_size(inst, key, len);
-            pline("{key:%s, pttl:%lldms, type:sset, size:%lu, db:%lu,\n  kvs:[",
-                  key, pttl, size, inst->db);
+            printf(" size:%lld", size);
             if (size) {
+                printf(",\n  values:[");
                 print_sset(inst, key, len);
+                pline("\b \n  ]");
             }
-            pline("  ]\n}");
+            pline("}");
+        }
+        break;
+
+        case KNONE: {
+            FATAL("none type of key:%s", key);
+        }
+        break;
+
+        case KUNKOWN: {
+            FATAL("unknown type of key:%s", key);
+        }
+    }
+}
+
+void migrate_key(redis_instance* src, redis_instance* dst, char* key, size_t len)
+{
+    long long size = 0;
+    int flag = get_key_type(src, key, len);
+    switch (flag) {
+        case KSTRING: {
+            redisReply* kv = (redisReply*)redisCommand(src->cxt, "get %b", key, len);
+            assert(kv != NULL);
+            assert(kv->type == REDIS_REPLY_STRING);
+            assert(kv->len != 0);
+
+            redisReply* reply = (redisReply*)redisCommand(
+                        dst->cxt, "set %b %b", key, len, kv->str, (size_t)(kv->len));
+            freeReplyObject(reply);
+
+            freeReplyObject(kv);
+        }
+        break;
+
+        case KHASH: {
+            migrate_hashtable(src, dst, key, len);
+        }
+        break;
+
+        case KLIST: {
+            migrate_list(src, dst, key, len);
+        }
+        break;
+
+        case KSET: {
+            migrate_set(src, dst, key, len);
+        }
+        break;
+
+        case KSSET: {
+            migrate_sset(src, dst, key, len);
         }
         break;
 

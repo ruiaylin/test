@@ -16,7 +16,7 @@ void print_db(redis_instance* inst);
 int main(int argc, char** argv)
 {
     if (argc < 5) {
-        FATAL("Right usage: dbprint ip port password db_id");
+        FATAL("Right usage: ./redis-dump ip port password db_id");
         return -1;
     }
 

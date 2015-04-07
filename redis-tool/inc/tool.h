@@ -33,7 +33,6 @@
 
 #define SCAN_INC            10
 
-#define print               printf
 #define pline(fmt, ...)     printf(fmt"\n", ##__VA_ARGS__)
 #define pinfo(fmt, ...)     printf("%s-%s-%d: "fmt"\n", ((char*)__FILE__),     \
                                   (char*)__func__, (n4)__LINE__, ##__VA_ARGS__)
@@ -88,6 +87,7 @@ long long get_sset_size(redis_instance* inst, char* sset, size_t len);
 long long get_hashtable_size(redis_instance* inst, char* hash, size_t len);
 
 void print_key(redis_instance* inst, char* key, size_t len);
+void migrate_key(redis_instance* src, redis_instance* dst, char* key, size_t len);
 
 #endif
 
