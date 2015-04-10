@@ -358,7 +358,7 @@ void print_sset2(redis_instance* inst, char* sset, size_t len)
 {
     redisReply* kv = (redisReply*)redisCommand(inst->cxt,
                 "zrange %b 0 -1 withscores", sset, len);
-    assert (kv != NULL);
+    assert(kv != NULL);
     assert(kv->type == REDIS_REPLY_ARRAY);
     assert(kv->elements != 0);
 
@@ -403,7 +403,7 @@ void migrate_sset2(redis_instance* src, redis_instance* dst, char* sset, size_t 
 {
     redisReply* kv = (redisReply*)redisCommand(src->cxt,
                 "zrange %b 0 -1 withscores", sset, len);
-    assert (kv != NULL);
+    assert(kv != NULL);
     assert(kv->type == REDIS_REPLY_ARRAY);
     assert(kv->elements != 0);
 
@@ -463,7 +463,7 @@ void print_hashtable(redis_instance* inst, char* hash, long long len)
 void print_hashtable2(redis_instance* inst, char* hash, long long len)
 {
     redisReply* kv = (redisReply*)redisCommand(inst->cxt, "hgetall %b", hash, len);
-    assert (kv != NULL);
+    assert(kv != NULL);
     assert(kv->type == REDIS_REPLY_ARRAY);
     assert(kv->elements != 0);
 
@@ -507,7 +507,7 @@ void migrate_hashtable(redis_instance* src, redis_instance* dst, char* hash, lon
 void migrate_hashtable2(redis_instance* src, redis_instance* dst, char* hash, long long len)
 {
     redisReply* kv = (redisReply*)redisCommand(src->cxt, "hgetall %b", hash, len);
-    assert (kv != NULL);
+    assert(kv != NULL);
     assert(kv->type == REDIS_REPLY_ARRAY);
     assert(kv->elements != 0);
 
