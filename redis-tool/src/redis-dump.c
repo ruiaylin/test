@@ -12,6 +12,7 @@
 #include "tool.h"
 
 void print_db(redis_instance* inst);
+void print_db2(redis_instance* inst);
 
 int main(int argc, char** argv)
 {
@@ -68,6 +69,13 @@ void print_db(redis_instance* inst)
     do {
         reply = (redisReply*)redisCommand(inst->cxt, "scan %lld count %lld", idx, SCAN_INC);
         assert(reply != NULL);
+        if (reply->type == REDIS_REPLY_ERROR
+            && !strncmp(reply->str, "ERR unknown command 'scan'", reply->len)) {
+            // redis server's version is too old
+            print_db2(inst);
+            freeReplyObject(reply);
+            break;
+        }
         assert(reply->type == REDIS_REPLY_ARRAY);
         assert(2 == reply->elements);
         assert(REDIS_REPLY_STRING == reply->element[0]->type);
@@ -81,5 +89,15 @@ void print_db(redis_instance* inst)
 
         freeReplyObject(reply);
     } while(idx != 0);
+}
+
+void print_db2(redis_instance* inst)
+{
+    redisReply* reply = (redisReply*)redisCommand(inst->cxt, "keys *");
+    assert(reply != NULL);
+    for (size_t idx = 0; idx < reply->elements; idx++) {
+        print_key2(inst, reply->element[idx]->str, (size_t)(reply->element[idx]->len));
+    }
+    freeReplyObject(reply);
 }
 

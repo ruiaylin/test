@@ -74,6 +74,7 @@ extern const char* type_name[];
 
 int connect_instance(redis_instance* inst);
 void disconnect_instance(redis_instance* inst);
+int select_db(redis_instance* inst);
 
 long long get_key_num(redis_instance* inst);
 long long get_lastsave(redis_instance* inst);
@@ -87,7 +88,9 @@ long long get_sset_size(redis_instance* inst, char* sset, size_t len);
 long long get_hashtable_size(redis_instance* inst, char* hash, size_t len);
 
 void print_key(redis_instance* inst, char* key, size_t len);
+void print_key2(redis_instance* inst, char* key, size_t len);
 void migrate_key(redis_instance* src, redis_instance* dst, char* key, size_t len);
+void migrate_key2(redis_instance* src, redis_instance* dst, char* key, size_t len);
 
 #endif
 

@@ -12,6 +12,7 @@
 #include "tool.h"
 
 void migrate_db(redis_instance* src, redis_instance* dst);
+void migrate_db2(redis_instance* src, redis_instance* dst);
 
 int main(int argc, char** argv)
 {
@@ -25,6 +26,12 @@ int main(int argc, char** argv)
     unsigned short port = (unsigned short)strtoul(argv[2], (char**)NULL, 10);
     char* password = argv[3];
     unsigned db=  (unsigned)strtoul(argv[4], (char**)NULL, 10);
+    /*
+    char* ip = "127.0.0.1";
+    unsigned short port = 10000;
+    char* password = "redis-instance-password";
+    unsigned db = 0;
+    */
 
     redis_instance src = {
         .port = port,
@@ -72,14 +79,22 @@ void migrate_db(redis_instance* src, redis_instance* dst)
     }
 
     // select db
-    get_key_num(dst);
+    select_db(dst);
 
     long index = 0;
     long long idx = 0;
     redisReply* reply;
     do {
-        reply = (redisReply*)redisCommand(src->cxt, "scan %lld count %lld", idx, SCAN_INC);
+        reply = (redisReply*)redisCommand(src->cxt,
+                    "scan %lld count %lld", idx, SCAN_INC);
         assert(reply != NULL);
+        if (reply->type == REDIS_REPLY_ERROR
+            && !strncmp(reply->str, "ERR unknown command 'scan'", reply->len)) {
+            // redis server's version is too old
+            migrate_db2(src, dst);
+            freeReplyObject(reply);
+            break;
+        }
         assert(reply->type == REDIS_REPLY_ARRAY);
         assert(2 == reply->elements);
         assert(REDIS_REPLY_STRING == reply->element[0]->type);
@@ -93,5 +108,24 @@ void migrate_db(redis_instance* src, redis_instance* dst)
 
         freeReplyObject(reply);
     } while(idx != 0);
+}
+
+void migrate_db2(redis_instance* src, redis_instance* dst)
+{
+    long long num = get_key_num(src);
+    if (num <= 0) {
+        FATAL("src key num %lld", num);
+        return;
+    }
+
+    // select db
+    select_db(dst);
+
+    redisReply* reply = (redisReply*)redisCommand(src->cxt, "keys *");
+    assert(reply != NULL);
+    for (size_t idx = 0; idx < reply->elements; idx++) {
+        migrate_key2(src, dst, reply->element[idx]->str, (size_t)(reply->element[idx]->len));
+    }
+    freeReplyObject(reply);
 }
 

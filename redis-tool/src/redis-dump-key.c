@@ -41,7 +41,16 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    print_key(&inst, key, strlen(key));
+    redisReply* reply = (redisReply*)redisCommand(inst.cxt, "scan %lld count %lld", 0, SCAN_INC);
+    assert(reply != NULL);
+    if (reply->type == REDIS_REPLY_ERROR && !strncmp(reply->str, "ERR unknown command 'scan'", reply->len)) {
+        // redis server's version is too old
+        print_key2(&inst, key, strlen(key));
+    } else {
+        print_key(&inst, key, strlen(key));
+    }
+    freeReplyObject(reply);
+
 
     disconnect_instance(&inst);
 
