@@ -12,7 +12,7 @@ SRC_DIR		= src
 OBJ_DIR		= obj
 LIB_DIR		= lib
 BIN_DIR		= bin
-BIN	        = redis-dump redis-dump-key redis-migrate
+BIN	        = redis-dump redis-dump-key redis-migrate redis-statistics
 
 BASE_PATH	=
 
@@ -44,6 +44,9 @@ $(BIN_DIR)/redis-dump-key:$(addprefix $(OBJ_DIR)/, tool.o redis-dump-key.o)
 	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
 
 $(BIN_DIR)/redis-migrate:$(addprefix $(OBJ_DIR)/, tool.o redis-migrate.o)
+	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
+
+$(BIN_DIR)/redis-statistics:$(addprefix $(OBJ_DIR)/, tool.o redis-statistics.o)
 	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
 
 strip:
