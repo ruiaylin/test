@@ -24,12 +24,14 @@ int connect_instance(redis_instance* inst)
         return - 1;
     }
 
-    redisReply* reply = (redisReply*)redisCommand(context, "auth %s", inst->password);
-    if (reply == NULL) {
-        PRINT_REPLY_ERROR(reply);
-        return -1;
+    if (inst->password && strlen(inst->password)) {
+        redisReply* reply = (redisReply*)redisCommand(context, "auth %s", inst->password);
+        if (reply == NULL) {
+            PRINT_REPLY_ERROR(reply);
+            return -1;
+        }
+        freeReplyObject(reply);
     }
-    freeReplyObject(reply);
 
     inst->cxt = context;
 
