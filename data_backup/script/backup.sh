@@ -1,4 +1,5 @@
 #!/bin/sh
+# backup tool, written by zhaoxin08 on 2015/03/29
 function backup() {
 	remote_host=$1
 	remote_port=22

@@ -1,6 +1,7 @@
 """
 #!/bin/python
 """
+# backup script, written by zhaoxin08 on 2015/04/09
 import sys
 import os
 import MySQLdb 
@@ -12,6 +13,8 @@ def GetRedisMasters(_host, _port, _user, _password, _db):
     result = cursor.execute(sql)
     redis_masters = []
     for row in cursor.fetchall():
+        #if (row[1] != "10.81.250.178") and (row[1] != "10.81.250.197") and (row[1] != "10.81.250.23"):
+        #    redis_masters.append([row[0], row[1], row[2]])
         redis_masters.append([row[0], row[1], row[2]])
     return redis_masters
 
@@ -40,5 +43,6 @@ if __name__ == '__main__':
     remote_dir="/root/agent/data/redis_8080"
     redis_masters=GetRedisMasters(host, port, user, password, db)
     for redis_master in redis_masters:
+        #print ("%s-%s-%s" % (redis_master[0], redis_master[1], redis_master[2]))
         cmd = "sh backup.sh %s %s %s %s %s %s" % (redis_master[1], remote_user, redis_master[2], remote_dir, redis_master[0], local_dir)
         os.system(cmd)
