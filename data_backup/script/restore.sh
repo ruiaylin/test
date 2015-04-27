@@ -8,7 +8,7 @@ function restore() {
 	remote_dir=$4
 	local_dir=$5
 	expect -c "
-	spawn scp -l 8000 -P $remote_port -r $local_dir/ $remote_user@$remote_host:$remote_dir/ 
+	spawn scp -P $remote_port -r $local_dir/ $remote_user@$remote_host:$remote_dir/ 
 	expect {
 	    \"*assword\" {set timeout 300; send \"$remote_password\r\";}
 	    \"yes/no\" {send \"yes\r\"; exp_continue;}
