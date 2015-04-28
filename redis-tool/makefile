@@ -12,11 +12,11 @@ SRC_DIR		= src
 OBJ_DIR		= obj
 LIB_DIR		= lib
 BIN_DIR		= bin
-BIN	        = redis-dump redis-dump-key redis-migrate redis-statistics
+BIN	        = redis-dump redis-dump-key redis-migrate redis-statistics redis-replay-aof
 
 BASE_PATH	=
 
-INC	        = -I$(INC_DIR) -I$(INC_DIR)/hiredis
+INC	        = -I$(INC_DIR) -I$(INC_DIR)/redis -I$(INC_DIR)/hiredis -I$(INC_DIR)/lua
 
 # rpath把lib的绝对路径放在elf文件中  -Wl,-rpath=./$(LIB_DIR) 
 LIB	        =  -L./$(LIB_DIR) -lhiredis
@@ -47,6 +47,9 @@ $(BIN_DIR)/redis-migrate:$(addprefix $(OBJ_DIR)/, tool.o redis-migrate.o)
 	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
 
 $(BIN_DIR)/redis-statistics:$(addprefix $(OBJ_DIR)/, tool.o redis-statistics.o)
+	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
+
+$(BIN_DIR)/redis-replay-aof:$(addprefix $(OBJ_DIR)/, tool.o redis-replay-aof.o)
 	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
 
 strip:
