@@ -5,17 +5,19 @@
 import sys
 import os
 import MySQLdb 
+from public import *
 
 def GetRedisMasters(_host, _port, _user, _password, _db):
     conn = MySQLdb.connect(host=_host, port=int(_port), user=_user, passwd=_password, db=_db)
     cursor = conn.cursor()
-    sql="select cluster_id,floating_ip,password from cache_instance where cache_instance_type=3;"
+    sql="select cluster_id,floating_ip,password,port from cache_instance where cache_instance_type=3;"
     result = cursor.execute(sql)
     redis_masters = []
     for row in cursor.fetchall():
         #if (row[1] != "10.81.250.178") and (row[1] != "10.81.250.197") and (row[1] != "10.81.250.23"):
         #    redis_masters.append([row[0], row[1], row[2]])
-        redis_masters.append([row[0], row[1], row[2]])
+        if IsOpen(row[1], row[3]):
+            redis_masters.append([row[0], row[1], row[2]])
     return redis_masters
 
 
