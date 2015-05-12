@@ -1,0 +1,5 @@
+CHARGING_HOME="/home/work/opbin/python-mysql"
+PYTHON_LIB_ROOT=${CHARGING_HOME}/python
+PYTHON_LIB64_PATH=${PYTHON_LIB_ROOT}/lib64/python2.6/site-packages/
+export PYTHONPATH=$PYTHON_LIB64_PATH
+export LD_LIBRARY_PATH=${CHARGING_HOME}/lib
