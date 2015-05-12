@@ -4,8 +4,8 @@
 # backup script, written by zhaoxin08 on 2015/04/09
 import sys
 import os
+sys.path.insert(2, "/home/work/opbin/tools/data-backup-tools/script/pexpect-2.3")
 import MySQLdb
-import public
 import pexpect
 #import sys
 import paramiko
@@ -21,6 +21,7 @@ def Backup(host, user, passwd, peer_dir, local_dir):
     flag = ""
     psd = passwd[0]
     try:
+        print ("host:%s, user:%s, passwd:%s" % (host, user, password))
         ssh.connect(hostname=host, username=user, password=passwd[0])
     except paramiko.AuthenticationException:
         try:
@@ -33,6 +34,8 @@ def Backup(host, user, passwd, peer_dir, local_dir):
             flag = "ok"
     except socket.error:
         print "Server is unreachable!"
+    except Exception as e:
+        print "exception:", e
     else:
         flag = "ok"
 
@@ -92,7 +95,8 @@ if __name__ == '__main__':
     if len(sys.argv) < 7:
         printHelp()
         sys.exit(1)
-
+	
+#10.58.144.51 5100 bce_r 29nCkiadfsa bce_scs /home/disk1/nfs_data
     host=sys.argv[1]
     port=sys.argv[2]
     user=sys.argv[3]
