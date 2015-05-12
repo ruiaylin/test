@@ -1,7 +1,7 @@
 """
 #!/bin/python
 """
-# restore script, written by zhaoxin08 on 2015/04/27
+# restore script, written by AlexStocks on 2015/04/27
 import sys
 import os
 import MySQLdb 

@@ -1,7 +1,7 @@
 """
 #!/bin/python
 """
-# backup script, written by zhaoxin08 on 2015/04/09
+# backup script, written by AlexStocks on 2015/04/09
 import sys
 import os
 import MySQLdb 
