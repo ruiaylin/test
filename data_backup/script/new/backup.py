@@ -4,7 +4,7 @@
 # backup script, written by AlexStocks on 2015/04/09
 import sys
 import os
-#sys.path.insert(2, "/home/work/opbin/tools/data-backup-tools/script/pexpect-2.3")
+sys.path.insert(2, "/home/alex/pexpect-2.3")
 import MySQLdb
 import pexpect
 import paramiko
@@ -12,6 +12,19 @@ import logging
 import log
 
 from public import *
+
+def CheckAof(name):
+    suffix = ".aof"
+    suffix_len = len(suffix)
+    flag = False
+    for _name in name:
+        _name_len = len(_name)
+        #logging.critical("%s %s %s %s" % (_name, suffix_len < len(_name), _name[_name_len-4 :_name_len], _name[_name_len-4 :_name_len] == suffix))
+        if suffix_len < len(_name) and _name[_name_len-4 :_name_len] == suffix:
+            flag = True
+            break
+
+    return flag
 
 def Backup(host, user, passwd, peer_dir, local_dir):
     """ SshExcuteCmd """
@@ -45,9 +58,8 @@ def Backup(host, user, passwd, peer_dir, local_dir):
         return
 
     ssh.exec_command("yum install -y openssh-clients.x86_64")
-    ssh.close()
 
-    print("begin scp host %s:%s" % (host, psd))
+    logging.info("begin scp host %s" % (host))
     command = ("scp -l 8000 -r -P %s %s@%s:%s/ %s/" % (22, user, host, peer_dir, local_dir))
     scp = pexpect.spawn(command)
     res = scp.expect(['password:', 'continue connecting (yes/no)?', pexpect.EOF, pexpect.TIMEOUT], timeout=100)
@@ -64,6 +76,16 @@ def Backup(host, user, passwd, peer_dir, local_dir):
         return None
     logging.debug("scp result:%s" % scp.read())
     scp.close()
+
+    stdin, stdout, stderr = ssh.exec_command("find %s -type f" % peer_dir)
+    files = stdout.read()
+    ssh.close()
+    file_str = ("").join(files)
+    file_list = file_str.split('\n')
+    logging.debug("host %s files:%s\n" % (host, files))
+    if CheckAof(file_list) == False:
+        logging.critical("host %s aof disable, its files:\n%s" % (host, files))
+
     return None
 
 def GetRedisMasters(_host, _port, _user, _password, _db):
