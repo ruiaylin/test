@@ -4,16 +4,16 @@
 # backup script, written by AlexStocks on 2015/04/09
 import sys
 import os
-sys.path.insert(2, "/home/work/opbin/tools/data-backup-tools/script/pexpect-2.3")
+#sys.path.insert(2, "/home/work/opbin/tools/data-backup-tools/script/pexpect-2.3")
 import MySQLdb
 import pexpect
-#import sys
 import paramiko
+import logging
+import log
 
 from public import *
 
 def Backup(host, user, passwd, peer_dir, local_dir):
-#def SshConnect(host, user, passwd):
     """ SshExcuteCmd """
     ssh = paramiko.SSHClient()
     ssh.load_system_host_keys()
@@ -21,21 +21,23 @@ def Backup(host, user, passwd, peer_dir, local_dir):
     flag = ""
     psd = passwd[0]
     try:
-        print ("host:%s, user:%s, passwd:%s" % (host, user, password))
+        logging.info("host:%s, user:%s, passwd:%s" % (host, user, psd))
         ssh.connect(hostname=host, username=user, password=passwd[0])
     except paramiko.AuthenticationException:
         try:
             #print ("try second passwd:%s" % passwd[1])
-            ssh.connect(hostname=host, username=user, password=passwd[1])
             psd = passwd[1]
+            logging.info("try again:host:%s, user:%s, passwd:%s" % (host, user, psd))
+            ssh.connect(hostname=host, username=user, password=passwd[1])
         except paramiko.AuthenticationException:
-            print "Auth Failed!"
+            logging.critical("Auth Failed!")
         else:
             flag = "ok"
     except socket.error:
-        print "Server is unreachable!"
+        logging.critical("Server %s is unreachable!" % host)
     except Exception as e:
-        print "exception:", e
+        #print "exception:", e
+        logging.critical("connect host %s, exception: %s" % (host, e))
     else:
         flag = "ok"
 
@@ -57,11 +59,10 @@ def Backup(host, user, passwd, peer_dir, local_dir):
         scp.sendline(psd)
         print ('scp %s OK', host)
     else:
-        print('scp %s failed:timeout or eof', host)
+        logging.critical('scp %s failed:timeout or eof', host)
         scp.close()
-        print('pexpect.EOF or pexpect.TIMEOUT')
         return None
-    print ("scp result:%s" % scp.read())
+    logging.debug("scp result:%s" % scp.read())
     scp.close()
     return None
 
@@ -95,8 +96,11 @@ if __name__ == '__main__':
     if len(sys.argv) < 7:
         printHelp()
         sys.exit(1)
-	
-#10.58.144.51 5100 bce_r 29nCkiadfsa bce_scs /home/disk1/nfs_data
+
+    cwd = os.path.dirname(os.path.realpath(__file__))
+    log.init_log(cwd + '/log/backup.log')
+    logging.info('backup starting...')
+
     host=sys.argv[1]
     port=sys.argv[2]
     user=sys.argv[3]
@@ -107,7 +111,6 @@ if __name__ == '__main__':
     redis_masters=GetRedisMasters(host, port, user, password, db)
     for redis_master in redis_masters:
         #print ("%s-%s-%s" % (redis_master[0], redis_master[1], redis_master[2]))
-        #cmd = "sh backup.sh %s %s %s %s %s %s %s" % (redis_master[1], remote_user, redis_master[2], remote_dir, redis_master[0], redis_master[3], local_dir)
         cluster_id=redis_master[0]
         remote_host=redis_master[1]
         remote_password = []
