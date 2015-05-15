@@ -1,10 +1,10 @@
 """
 #!/bin/python
 """
-# backup script, written by AlexStocks on 2015/04/09
+# backup script, written by zhaoxin08 on 2015/04/09
 import sys
 import os
-sys.path.insert(2, "/home/alex/pexpect-2.3")
+#sys.path.insert(2, "/home/work/opbin/tools/data-backup-tools/script/pexpect-2.3")
 import MySQLdb
 import pexpect
 import paramiko
@@ -58,6 +58,7 @@ def Backup(host, user, passwd, peer_dir, local_dir):
         return
 
     ssh.exec_command("yum install -y openssh-clients.x86_64")
+    ssh.exec_command("./redis-cli -h 127.0.0.1 -p 8080 config set appendonly  yes")
 
     logging.info("begin scp host %s" % (host))
     command = ("scp -l 8000 -r -P %s %s@%s:%s/ %s/" % (22, user, host, peer_dir, local_dir))
