@@ -1,17 +1,97 @@
 """
 #!/bin/python
 """
-# backup script, written by zhaoxin08 on 2015/04/09
+# backup script, written by AlexStocks on 2015/04/09
 import sys
 import os
+import httplib
+import json
 #sys.path.insert(2, "/home/work/opbin/tools/data-backup-tools/script/pexpect-2.3")
 import MySQLdb
 import pexpect
 import paramiko
 import logging
 import log
+import socket
 
+from conf import *
 from public import *
+
+def GetLocalIp():
+    return socket.gethostbyname(socket.gethostname())
+
+def Curl(host, port, httpType, url, headers):
+    """ Curl """
+    connection = httplib.HTTPConnection(host, port)
+    connection.request(httpType, url, '', headers)
+    response = connection.getresponse()
+    result = response.read().strip()
+    status = response.status
+    if not str(status).startswith('2'):
+        logging.warn(result)
+        logging.warn(status)
+        sys.exit(-1)
+    return json.loads(result)
+
+def GetRsInfo(host, port, vip, vport):
+    uri = "/?r=interface/api&handler=getRsInfo&vip=" + vip + "&port=" + str(vport)
+    logging.debug("host:" + host + " port:" + str(port) +" uri: " + uri)
+    return Curl(host, port, 'GET', uri, {})
+
+def GetValidRs(response):
+    """ GetValidRs """
+    logging.debug(json.dumps(response))
+    if response['status'] == 0:
+        if 'message' in response.keys():
+            if 'port_info_list' in response['message'].keys():
+                if len(response['message']['port_info_list']) == 1:
+                    if 'vs_port' in response['message']['port_info_list'][0].keys():
+                        response['message']['port_info_list'][0]['vs_port'] = int(
+                        response['message']['port_info_list'][0]['vs_port'])
+                    else:
+                        ErrorQuit("vs_port not exit :" +
+                        json.dumps(response['message']['port_info_list'][0]))
+                    if 'vs_port_end' in response['message']['port_info_list'][0].keys():
+                        response['message']['port_info_list'][0]['vs_port_end'] = int(
+                        response['message']['port_info_list'][0]['vs_port_end'])
+                    else:
+                        ErrorQuit("vs_port_end not exit :" +
+                        json.dumps(response['message']['port_info_list'][0]))
+                    if 'rs_info_list' in response['message']['port_info_list'][0].keys():
+                        if len(response['message']['port_info_list'][0]['rs_info_list']) == 2:
+                            for rs in response['message']['port_info_list'][0]['rs_info_list']:
+                                if rs['weight'] == "1":
+                                    return rs['rs_ip']
+                        else:
+                            ErrorQuit("Wrong rs_info_list len: " +
+                            json.dumps(response['message']['port_info_list'][0]['rs_info_list']))
+                    else:
+                        ErrorQuit("rs_info_list not exit: " +
+                        json.dumps(response['message']['port_info_list'][0]))
+                else:
+                    ErrorQuit("Wrong port_info_list len: " +
+                    json.dumps(response['message']['port_info_list']))
+            else:
+                ErrorQuit("message not exist: " + json.dumps(response['message']))
+        else:
+            ErrorQuit("Wrong response: " + json.dumps(response))
+    else:
+        ErrorQuit("Wrong status: " + json.dumps(response))
+
+    return None
+
+def IsMaster():
+    response = GetRsInfo(bgw['host'], (int)(bgw['port']), bgw['vip'], bgw['vport'])
+    valid_rs = GetValidRs(response)
+    logging.debug("valid_rs :%s" % valid_rs)
+    local_host = GetLocalIp()
+    logging.debug("local host:%s" % local_host)
+    if valid_rs == local_host:
+        return True
+    else:
+        logging.warn('Error: local host %s is not the csmaster master!' % local_host)
+
+    return False
 
 def CheckAof(name):
     suffix = ".aof"
@@ -112,26 +192,24 @@ def printHelp():
     """ print help prompt
     """
     print 'usage:'
-    print '  example: ./backup.py mysql-host mysql-port user password db local_dir'
+    print '  example: ./backup.py'
     #mysql -h publicdb.bce-preinternal.baidu.com -P7010 -ubce_rdsqa_w -pvZ1UjN0flrAtkrcf bce_scs"
 
 if __name__ == '__main__':
-    if len(sys.argv) < 7:
-        printHelp()
-        sys.exit(1)
+    # if len(sys.argv) < 7:
+    #     printHelp()
+    #     sys.exit(1)
 
     cwd = os.path.dirname(os.path.realpath(__file__))
     log.init_log(cwd + '/log/backup.log')
     logging.info('backup starting...')
 
-    host=sys.argv[1]
-    port=sys.argv[2]
-    user=sys.argv[3]
-    password=sys.argv[4]
-    db=sys.argv[5]
+    if False == IsMaster():
+        sys.exit(1)
+
     remote_user="root"
     remote_dir="/root/agent/data/redis_8080"
-    redis_masters=GetRedisMasters(host, port, user, password, db)
+    redis_masters=GetRedisMasters(mysql['host'], mysql['port'], mysql['user'], mysql['password'], mysql['db'])
     for redis_master in redis_masters:
         #print ("%s-%s-%s" % (redis_master[0], redis_master[1], redis_master[2]))
         cluster_id=redis_master[0]
@@ -140,8 +218,7 @@ if __name__ == '__main__':
         remote_password.append(redis_master[2])
         remote_password.append("admin@123")
         hash_name=redis_master[3]
-        local_dir=sys.argv[6]
-        local_dir=("%s/%s/%s" % (local_dir, cluster_id, hash_name))
+        local_dir=("%s/%s/%s" % (local_backup_dir, cluster_id, hash_name))
         cmd = ("mkdir -p %s && cd %s && rm -rf ./data_old && mv data data_old && mkdir data" % (local_dir, local_dir))
         #print cmd
         os.system(cmd)
@@ -149,5 +226,6 @@ if __name__ == '__main__':
         cmd = ("mkdir -p %s" % local_dir)
         #print cmd
         os.system(cmd)
+        #print('peer{host:%s, user:%s, password:%s, dir:%s}' % (remote_host, remote_user, remote_password, remote_dir))
         Backup(remote_host, remote_user, remote_password, remote_dir, local_dir)
 
