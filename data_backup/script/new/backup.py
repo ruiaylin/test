@@ -108,6 +108,7 @@ def CheckAof(name):
 
 def Backup(host, user, passwd, peer_dir, local_dir):
     """ SshExcuteCmd """
+    print('host:%s, passwd:%s' % (host, passwd))
     ssh = paramiko.SSHClient()
     ssh.load_system_host_keys()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -138,24 +139,27 @@ def Backup(host, user, passwd, peer_dir, local_dir):
         return
 
     ssh.exec_command("yum install -y openssh-clients.x86_64")
-    ssh.exec_command("./redis-cli -h 127.0.0.1 -p 8080 config set appendonly  yes")
+    ssh.exec_command("/root/agent/bin/redis-cli -h 127.0.0.1 -p 8080 config set appendonly yes")
 
     logging.info("begin scp host %s" % (host))
-    command = ("scp -l 8000 -r -P %s %s@%s:%s/ %s/" % (22, user, host, peer_dir, local_dir))
+    command = ("scp -l 8000 -r -P %s %s@%s:%s/%s %s/" % (22, user, host, peer_dir, 'appendonly.aof', local_dir))
     scp = pexpect.spawn(command)
-    res = scp.expect(['password:', 'continue connecting (yes/no)?', pexpect.EOF, pexpect.TIMEOUT], timeout=100)
+    res = scp.expect(['password:', 'continue connecting (yes/no)?', pexpect.EOF, pexpect.TIMEOUT], timeout=None)
     if res == 0:
         scp.sendline(psd)
     elif res == 1:
         scp.sendline('yes\n')
         scp.expect('password: ')
         scp.sendline(psd)
-        print ('scp %s OK', host)
+        print ('scp %s OK' % host)
     else:
-        logging.critical('scp %s failed:timeout or eof', host)
+        logging.critical('scp %s failed:timeout or eof' % host)
         scp.close()
         return None
-    logging.debug("scp result:%s" % scp.read())
+    # scp.expect(['dump.rdb', 'appendonly.aof', pexpect.EOF, pexpect.TIMEOUT], timeout=None)
+    scp.expect(pexpect.EOF, timeout=None) # pexpect.TIMEOUT: Timeout exceeded in read_nonblocking().
+    # logging.debug("scp result:%s" % scp.read())
+    logging.debug("scp %s finished" % host)
     scp.close()
 
     stdin, stdout, stderr = ssh.exec_command("find %s -type f" % peer_dir)
@@ -186,7 +190,6 @@ def GetRedisMasters(_host, _port, _user, _password, _db):
             redis_masters.append([row[0], row[1], row[2], row[3]])
     return redis_masters
 
-
 """print help"""
 def printHelp():
     """ print help prompt
@@ -196,16 +199,12 @@ def printHelp():
     #mysql -h publicdb.bce-preinternal.baidu.com -P7010 -ubce_rdsqa_w -pvZ1UjN0flrAtkrcf bce_scs"
 
 if __name__ == '__main__':
-    # if len(sys.argv) < 7:
-    #     printHelp()
-    #     sys.exit(1)
-
     cwd = os.path.dirname(os.path.realpath(__file__))
     log.init_log(cwd + '/log/backup.log')
     logging.info('backup starting...')
 
-    if False == IsMaster():
-        sys.exit(1)
+    # if False == IsMaster():
+    #    sys.exit(1)
 
     remote_user="root"
     remote_dir="/root/agent/data/redis_8080"
