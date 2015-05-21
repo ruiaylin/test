@@ -1,7 +1,7 @@
 """
 #!/bin/python
 """
-# backup script, written by AlexStocks on 2015/04/09
+# backup script, written by zhaoxin08 on 2015/04/09
 import sys
 import os
 import httplib
@@ -79,6 +79,12 @@ def GetValidRs(response):
         ErrorQuit("Wrong status: " + json.dumps(response))
 
     return None
+
+def GetProcessNum(process):
+    command = ('ps aux | grep %s | grep -vE \'noah|grep\' | wc -l' % process)
+    num = os.popen(command, 'r').readlines()[0]
+
+    return num
 
 def IsMaster():
     response = GetRsInfo(bgw['host'], (int)(bgw['port']), bgw['vip'], bgw['vport'])
@@ -203,8 +209,16 @@ if __name__ == '__main__':
     log.init_log(cwd + '/log/backup.log')
     logging.info('backup starting...')
 
-    # if False == IsMaster():
-    #    sys.exit(1)
+    # offline
+    if online == 0 and False == IsMaster():
+       print "error: not real csmaster master!"
+       sys.exit(1)
+
+    # online
+    num = GetProcessNum('csmaster')
+    logging.debug("master process number:%s" % num)
+    if online == 1 and int(num) <= 0:
+        sys.exit(1)
 
     remote_user="root"
     remote_dir="/root/agent/data/redis_8080"
