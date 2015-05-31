@@ -2,29 +2,30 @@
 
 .SUFFIXES: .sh .h .c .cc .cpp
 
-CXX	        = gcc
-#CXXFLAGS	= -ggdb3 -Wall -Werror
-CXXFLAGS	= -std=c99 -pedantic -c -fPIC -Wstrict-prototypes -Wwrite-strings -g -ggdb #-Wall -W 
-CXXFLAG     = -fPIC  -Wall -W -Wstrict-prototypes -Wwrite-strings -g -ggdb 
+CC          = gcc
+CX          = g++
+#CCFLAGS    = -ggdb3 -Wall -Werror
+CCFLAGS     = -std=c99 -c -fPIC -Wstrict-prototypes -Wwrite-strings -g -ggdb #-Wall -W 
+CXFLAGS     = -c -fPIC -Wwrite-strings -g -ggdb #-Wall -W 
+CCFLAG      = -fPIC  -Wall -W -Wstrict-prototypes -Wwrite-strings -g -ggdb 
 
-INC_DIR		= inc
-SRC_DIR		= src
-OBJ_DIR		= obj
-LIB_DIR		= lib
-BIN_DIR		= bin
-BIN	        = redis-dump redis-dump-key redis-migrate redis-statistics redis-replay-aof
+INC_DIR     = inc
+SRC_DIR     = src
+OBJ_DIR     = obj
+LIB_DIR     = lib
+BIN_DIR     = bin
+BIN         = redis-dump redis-dump-key redis-migrate redis-max-kv
 
-BASE_PATH	=
+BASE_PATH   =
 
-INC	        = -I$(INC_DIR) -I$(INC_DIR)/redis -I$(INC_DIR)/hiredis -I$(INC_DIR)/lua
+INC         = -I$(INC_DIR) -I$(INC_DIR)/hiredis
 
 # rpath把lib的绝对路径放在elf文件中  -Wl,-rpath=./$(LIB_DIR) 
-LIB	        =  -L./$(LIB_DIR) -lhiredis
+LIB         =  -L./$(LIB_DIR) -lhiredis
 
 all: clean debug release # strip
 
 debug release gprof: dir $(addprefix $(BIN_DIR)/,$(BIN))
-
 
 #@ do not outoupt this command - ingnore its error and continue to make
 dir:
@@ -35,22 +36,22 @@ dir:
 	@-mkdir -p $(BIN_DIR)
 
 $(OBJ_DIR)/%.o:$(SRC_DIR)/%.c
-	$(CXX) $(CXXFLAGS) $(CXX_MACRO) -o $@ $(INC) -c $<
+	$(CC) $(CCFLAGS) $(CC_MACRO) -o $@ $(INC) -c $<
+
+$(OBJ_DIR)/%.o:$(SRC_DIR)/%.cc
+	$(CX) $(CXFLAGS) $(CC_MACRO) -o $@ $(INC) -c $<
 
 $(BIN_DIR)/redis-dump:$(addprefix $(OBJ_DIR)/, tool.o redis-dump.o)
-	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
+	$(CC) $(CCFLAG) $(CC_MACRO) -o $@ $^ $(LIB)
 
 $(BIN_DIR)/redis-dump-key:$(addprefix $(OBJ_DIR)/, tool.o redis-dump-key.o)
-	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
+	$(CC) $(CCFLAG) $(CC_MACRO) -o $@ $^ $(LIB)
 
 $(BIN_DIR)/redis-migrate:$(addprefix $(OBJ_DIR)/, tool.o redis-migrate.o)
-	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
+	$(CC) $(CCFLAG) $(CC_MACRO) -o $@ $^ $(LIB)
 
-$(BIN_DIR)/redis-statistics:$(addprefix $(OBJ_DIR)/, tool.o redis-statistics.o)
-	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
-
-$(BIN_DIR)/redis-replay-aof:$(addprefix $(OBJ_DIR)/, tool.o redis-replay-aof.o)
-	$(CXX) $(CXXFLAG) $(CXX_MACRO) -o $@ $^ $(LIB)
+$(BIN_DIR)/redis-max-kv:$(addprefix $(OBJ_DIR)/, tool.o redis-max-kv.o)
+	$(CX) $(CCFLAG) $(CC_MACRO) -o $@ $^ $(LIB)
 
 strip:
 	strip $(addprefix $(BIN_DIR)/,$(BIN))
