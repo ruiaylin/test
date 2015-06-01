@@ -35,7 +35,7 @@
 
 #define pline(fmt, ...)     printf(fmt"\n", ##__VA_ARGS__)
 #define pinfo(fmt, ...)     printf("%s-%s-%d: "fmt"\n", ((char*)__FILE__),     \
-                                  (char*)__func__, (n4)__LINE__, ##__VA_ARGS__)
+                                  (char*)__func__, (int)__LINE__, ##__VA_ARGS__)
 #define perr(fmt, ...)     \
     fprintf(stderr, "\033[1;31;40m%s-%s-%d: error: "fmt"\033[0m\n", \
             (char*)__FILE__, (char*)__func__, (int)__LINE__, ##__VA_ARGS__)
