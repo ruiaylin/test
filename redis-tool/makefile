@@ -14,7 +14,7 @@ SRC_DIR     = src
 OBJ_DIR     = obj
 LIB_DIR     = lib
 BIN_DIR     = bin
-BIN         = redis-dump redis-dump-key redis-migrate redis-max-kv
+BIN         = redis-replay-aof #redis-dump redis-dump-key redis-migrate redis-max-kv
 
 BASE_PATH   =
 
@@ -52,6 +52,9 @@ $(BIN_DIR)/redis-migrate:$(addprefix $(OBJ_DIR)/, tool.o redis-migrate.o)
 
 $(BIN_DIR)/redis-max-kv:$(addprefix $(OBJ_DIR)/, tool.o redis-max-kv.o)
 	$(CX) $(CCFLAG) $(CC_MACRO) -o $@ $^ $(LIB)
+
+$(BIN_DIR)/redis-replay-aof:$(addprefix $(OBJ_DIR)/, redis-replay-aof.o)
+	$(CC) $(CCFLAG) $(CC_MACRO) -o $@ $^ $(LIB)
 
 strip:
 	strip $(addprefix $(BIN_DIR)/,$(BIN))

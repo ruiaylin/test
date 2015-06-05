@@ -27,8 +27,6 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "redis.h"
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -38,8 +36,7 @@
 
 #include "hiredis.h"
 #include "sds.h"
-// #include "zmalloc.h"
-#include "anet.h"
+#include "tool.h"
 
 #define MAX_LONG_LEN 128
 #define REDIS_AOF_COMMAND_THRESHOLD 1000000
@@ -48,14 +45,12 @@
 #define CMD_LONG 1 // return immediately on eof
 #define ARG_LONG 0 // retry on eof
 
-static int loglevel = REDIS_NOTICE;
 /*
- * replayCtx: contain the replay context 
- * @file buffer needed? suppose to be not, we use cached IO, 
+ * replay_ctx: contain the replay context
+ * @file buffer needed suppose to be not, we use cached IO,
  * @if needed we can increase the cache size
  */
-typedef struct replayCtx {
-
+typedef struct replay_ctx {
     off_t size;             // current file size
     off_t pos;              // current file seek position
     off_t diff;             // current file diff
@@ -63,38 +58,37 @@ typedef struct replayCtx {
     long processed_cmd;     // processed commands number
     long skipped_cmd;       // unrecoginized commands number
 
-    FILE *fp;               // aof file fp
+    FILE* fp;               // aof file fp
     sds filename;           // aof file name
-    void *buf;              // buffer for file I/O
+    void* buf;              // buffer for file I/O
 
     sds ip;                 // target ip
     int port;               // target port
 
     int pipe_cmds;          // commands sent per time
-    redisContext * redis;   // context for replay the commands
+    redisContext*  redis;   // context for replay the commands
 
     sds filter;             // key filter;
     sds prefix;             // prefix to be replaced
     sds replace_prefix;     // replace prefix to be added for keys
+} replay_ctx;
 
-}replayCtx;
-
-/* configuraton for replay */
-typedef struct Config {
+/* confuraton for replay */
+typedef struct config {
     int pipe_cmds;
-    char * filename;
-    char * host;
-    char * prefix;
-    char * replace_prefix;
-    char * filter;
+    char*  filename;
+    char*  host;
+    char*  prefix;
+    char*  replace_prefix;
+    char*  filter;
     int verbose;
     int only_check;
-} Config;
+} config;
 
-static char * CMD_SUPPORTED[] = {
-    "MSET",     
-    "MSETNX",   
-    "DEL",      
+static const char*  CMD_SUPPORTED[] = {
+    "MSET",
+    "MSETNX",
+    "DEL",
     "SET",
     "HMSET",
     "EXPIRE",
@@ -190,39 +184,19 @@ long long ustime(void) {
     return ust;
 }
 
-void redisLog(int level, const char *fmt, ...) {
-    va_list ap;
-    char msg[1024];
-
-    if ((level&0xff) < loglevel) return;
-
-    va_start(ap, fmt);
-    vsnprintf(msg, sizeof(msg), fmt, ap);
-    va_end(ap);
-
-    const char *c = ".-*#";
-    char buf[64];
-
-    int off;
-    struct timeval tv;
-
-    gettimeofday(&tv,NULL);
-    off = strftime(buf,sizeof(buf),"%d %b %H:%M:%S.",localtime(&tv.tv_sec));
-    snprintf(buf+off,sizeof(buf)-off,"%03d",(int)tv.tv_usec/1000);
-    printf("[%d] %s %c %s\n",(int)getpid(),buf,c[level],msg);
-    fflush(stdout);
-
-} 
-
-int consumeNewline(char *buf) {
+int consume_new_line(char* buf)
+{
     if (strncmp(buf,"\r\n",2) != 0) {
         return REDIS_ERR;
     }
     return REDIS_OK;
 }
 
-void safeFreeArgvs(int argc, sds *argvs) {
-    if(argvs == NULL) return;
+void safe_free_args(int argc, sds* argvs)
+{
+    if (argvs == NULL) {
+        return;
+    }
 
     for (int i = 0; i < argc; i++) {
         sdsfree(argvs[i]);
@@ -231,13 +205,12 @@ void safeFreeArgvs(int argc, sds *argvs) {
     free(argvs);
 }
 
-void refreshAppendOnlyFileStat(replayCtx *repctx)
+void refresh_aof_stat(replay_ctx* repctx)
 {
-    struct redis_stat sb;     
-    FILE *fp = repctx->fp;
-    if (redis_fstat(fileno(fp),&sb) == -1) {
-        //redisLog(REDIS_WARNING, "failed to get stat of file %s", repctx->filename);
-        redisLog(REDIS_NOTICE, "failed to get stat of file %s\n", repctx->filename);
+    struct stat sb;
+    FILE* fp = repctx->fp;
+    if (fstat(fileno(fp),&sb) == -1) {
+        perr("failed to get stat of file %s\n", repctx->filename);
         return;
     }
     repctx->size = sb.st_size;
@@ -245,10 +218,10 @@ void refreshAppendOnlyFileStat(replayCtx *repctx)
     repctx->diff = repctx->size - repctx->pos;
 }
 
-int safeReadLong(replayCtx *repctx, char prefix, long *target, int return_immediately)
+int safe_read_long(replay_ctx* ctx, char prefix, long* target, int return_immediately)
 {
-    char buf[MAX_LONG_LEN], *eptr;
-    FILE *fp = repctx->fp;
+    char buf[MAX_LONG_LEN],* eptr;
+    FILE* fp = ctx->fp;
     long len = 0, remain = MAX_LONG_LEN, bytes = 0;
     int retry = 1;
 
@@ -257,9 +230,9 @@ int safeReadLong(replayCtx *repctx, char prefix, long *target, int return_immedi
     memset(buf, '\0', sizeof(buf));
 
     do {
-        if(fgets(eptr, remain, fp) == NULL) {
+        if (fgets(eptr, remain, fp) == NULL) {
             /* return 0 if eof is read at the 1st try, and this is an expected way */
-            if(retry == 1 && return_immediately) {
+            if (retry == 1 && return_immediately) {
                 *target = 0;
                 return REDIS_OK;
             } else {
@@ -269,13 +242,13 @@ int safeReadLong(replayCtx *repctx, char prefix, long *target, int return_immedi
             }
         }
 
-        if(buf[0] != prefix) {
+        if (buf[0] != prefix) {
             return REDIS_ERR;
         }
 
         len = strtol(buf + 1, &eptr, 10);
 
-        if(consumeNewline(eptr) == REDIS_OK) {
+        if (consume_new_line(eptr) == REDIS_OK) {
             *target = len;
             return REDIS_OK;
         }
@@ -288,29 +261,29 @@ int safeReadLong(replayCtx *repctx, char prefix, long *target, int return_immedi
     return REDIS_ERR;
 }
 
-int safeReadString(replayCtx *repctx, sds * target, int key)
+int safe_read_string(replay_ctx* ctx, sds* target, int key)
 {
     sds argsds;
     long len, remain, bytes;
-    char *buf = NULL, *eptr;
+    char* buf = NULL, *eptr;
     long prelen = 0, replen = 0;
     int retry = 1;
 
-    int should = key && repctx->prefix != NULL && repctx->replace_prefix != NULL;
+    int should = key && ctx->prefix != NULL && ctx->replace_prefix != NULL;
 
-    if( should ) {
-        prelen = sdslen(repctx->prefix);
-        replen = sdslen(repctx->replace_prefix);
+    if (should) {
+        prelen = sdslen(ctx->prefix);
+        replen = sdslen(ctx->replace_prefix);
     }
 
-    if(safeReadLong(repctx, '$', &len, ARG_LONG) == REDIS_ERR) {
-        redisLog(REDIS_WARNING, "failed to read argument length, bad format file");
+    if (safe_read_long(ctx, '$', &len, ARG_LONG) == REDIS_ERR) {
+        perr("failed to read argument length, bad format file");
         goto error;
     }
 
-    buf = (char *)malloc(len + 2);
-    if(buf == NULL) {
-        redisLog(REDIS_WARNING, "failed to malloc memory for command argument");
+    buf = (char*)malloc(len + 2);
+    if (buf == NULL) {
+        perr("failed to malloc memory for command argument");
         goto error;
     }
 
@@ -318,26 +291,26 @@ int safeReadString(replayCtx *repctx, sds * target, int key)
     remain = len + 2;
     do {
         /* do the file position check */
-        if(retry % 2 == 0) { 
+        if (retry % 2 == 0) {
             usleep(1000000);
         }
 
-        bytes = fread(eptr, 1, remain, repctx->fp);
+        bytes = fread(eptr, 1, remain, ctx->fp);
         remain -= bytes;
         eptr = eptr + bytes;
         ++retry;
-    }while(remain > 0);
+    } while(remain > 0);
 
     eptr = buf + len;
-    if(consumeNewline(eptr) == REDIS_ERR) {
-        redisLog(REDIS_WARNING, "no new line subffix found");
+    if (consume_new_line(eptr) == REDIS_ERR) {
+        perr("no new line subffix found");
         goto error;
     }
 
     long real = len;
 
-    if(should) {
-        if(!strncmp(repctx->prefix, buf, sdslen(repctx->prefix))){
+    if (should) {
+        if (!strncmp(ctx->prefix, buf, sdslen(ctx->prefix))){
             real = len + replen - prelen;
         } else {
             should = 0;
@@ -347,21 +320,21 @@ int safeReadString(replayCtx *repctx, sds * target, int key)
     buf[len] = '\0';
     argsds = sdsnewlen(NULL, real);
 
-    if( should ) {
-        sdscpylen(argsds, repctx->replace_prefix, replen);
+    if (should) {
+        sdscpylen(argsds, ctx->replace_prefix, replen);
         sdscatlen(argsds, buf + prelen, len - prelen);
     } else {
         sdscpylen(argsds, buf, len);
     }
 
-    *target = argsds;
+   * target = argsds;
     free(buf);
     return REDIS_OK;
 
 error:
-    *target = NULL;
+   * target = NULL;
 
-    if(buf != NULL) {
+    if (buf != NULL) {
         free(buf);
     }
 
@@ -370,10 +343,10 @@ error:
 
 int supported(sds cmd)
 {
-    int numcommands = sizeof(CMD_SUPPORTED) / sizeof(char *);
+    int numcommands = sizeof(CMD_SUPPORTED) / sizeof(char*);
 
     for (int i = 0; i < numcommands; i++) {
-        if(!strcasecmp(CMD_SUPPORTED[i], cmd)) {
+        if (!strcasecmp(CMD_SUPPORTED[i], cmd)) {
             return 1;
         }
     }
@@ -381,12 +354,13 @@ int supported(sds cmd)
     return 0;
 }
 
-int getRedisCommand(replayCtx *ctx, int *argc, sds **argv){
+int get_redis_command(replay_ctx* ctx, int* argc, sds** argv)
+{
     long len = 0, j, step = 1;
     int normal = 0, key = 0;
-    sds *tmp;
+    sds* tmp;
 
-    if(safeReadLong(ctx, '*', &len, CMD_LONG) != REDIS_OK) {
+    if (safe_read_long(ctx, '*', &len, CMD_LONG) != REDIS_OK) {
         goto error;
     }
 
@@ -397,12 +371,12 @@ int getRedisCommand(replayCtx *ctx, int *argc, sds **argv){
     }
 
     *argc = len;
-    tmp = (sds *)malloc(len * sizeof(sds));
-    if(tmp == NULL) {
+    tmp = (sds*)malloc(len * sizeof(sds));
+    if (tmp == NULL) {
         goto error;
     }
 
-    if(safeReadString(ctx, &tmp[0], 0) != REDIS_OK) {
+    if (safe_read_string(ctx, &tmp[0], 0) != REDIS_OK) {
         goto error;
     }
 
@@ -425,13 +399,13 @@ int getRedisCommand(replayCtx *ctx, int *argc, sds **argv){
 
     for (j = 1; j < len; j++) {
         if (normal) {
-            if( j == 1) {
+            if ( j == 1) {
                 key = 1;
             } else {
                 key = 0;
             }
         } else {
-            if( step == 0 ) {
+            if ( step == 0 ) {
                 key = 0;
             } else if ( (j + 1) % step == 0 ) {
                 key = 1;
@@ -439,7 +413,7 @@ int getRedisCommand(replayCtx *ctx, int *argc, sds **argv){
                 key = 0;
             }
         }
-        if(safeReadString(ctx, &tmp[j], key) != REDIS_OK) {
+        if (safe_read_string(ctx, &tmp[j], key) != REDIS_OK) {
             goto error;
         }
     }
@@ -448,131 +422,131 @@ int getRedisCommand(replayCtx *ctx, int *argc, sds **argv){
     return REDIS_OK;
 
 error:
-    safeFreeArgvs(len, *argv);
+    safe_free_args(len, *argv);
     *argv = NULL;
     return REDIS_ERR;
 }
 
-void cmdToString(int argc, const char **argv) {
+void cmd_to_string(int argc, const char** argv)
+{
     for(int i = 0; i < argc; i++) {
         printf("%s ", argv[i]);
     }
     printf("\n");
 }
 
-int getPipeReply(replayCtx *ctx)
+int get_pipe_reply(replay_ctx* ctx)
 {
-    redisContext *c = ctx->redis;
-    void *reply = NULL;
+    redisContext* c = ctx->redis;
+    void* reply = NULL;
     int ret = REDIS_OK;
 
     ret = redisGetReply(c, &reply);
-    if(c->err & (REDIS_ERR_IO | REDIS_ERR_EOF)) {
-        redisLog(REDIS_WARNING, "connection error, failed to get reply");
-    } else if(c->err) {
-        redisLog(REDIS_WARNING, "command execution error");
+    if (c->err & (REDIS_ERR_IO | REDIS_ERR_EOF)) {
+        perr("connection error, failed to get reply");
+    } else if (c->err) {
+        perr("command execution error");
     }
-    if(reply != NULL) {
+    if (reply != NULL) {
         freeReplyObject(reply);
     }
     return ret;
 }
 
-void checkAppendOnlyFile(replayCtx *ctx)
+void check_aof(replay_ctx* ctx)
 {
-    sds *argv = NULL;
+    sds* argv = NULL;
     int argc;
     long loops = 0;
 
     while(1) {
-        if(getRedisCommand(ctx, &argc, &argv) != REDIS_OK) {
-            redisLog(REDIS_WARNING, "wrong format command at position %ld", (long)ctx->pos);
+        if (get_redis_command(ctx, &argc, &argv) != REDIS_OK) {
+            perr("wrong format command at position %ld", (long)ctx->pos);
             goto end;
         }
 
-        if(argv == NULL) {
-            redisLog(REDIS_WARNING, "reach end of file");
+        if (argv == NULL) {
+            perr("reach end of file");
             goto end;
         }
 
-        if (!supported(argv[0])) {     
-            sds cmd = sdsjoin(argv, argc, " ");
-            redisLog(REDIS_NOTICE, "unsupported cmd found: %s", cmd);
-            sdsfree(cmd); 
-            ctx->skipped_cmd += 1; 
+        if (!supported(argv[0])) {
+            sds cmd = sdsjoin(argv, argc, (char*)(" "));
+            perr("unsupported cmd found: %s", cmd);
+            sdsfree(cmd);
+            ctx->skipped_cmd += 1;
         } else {
             ctx->processed_cmd += 1;
         }
 
         loops += 1;
-        safeFreeArgvs(argc, argv);     
+        safe_free_args(argc, argv);
 
-        refreshAppendOnlyFileStat(ctx);
-        if( loops >= 10000 ) {
-             redisLog(REDIS_NOTICE, "progress: [processed:%ld] [skipped:%ld] [filesize:%ld] [postion:%ld] [diff:%ld]", \
+        refresh_aof_stat(ctx);
+        if ( loops >= 10000 ) {
+             perr("progress: [processed:%ld] [skipped:%ld] [filesize:%ld] [postion:%ld] [diff:%ld]", \
                 ctx->processed_cmd, ctx->skipped_cmd, (long)ctx->size, (long)ctx->pos, (long)ctx->diff);
              loops = 0;
         }
     }
 
 end:
-    refreshAppendOnlyFileStat(ctx);
-    redisLog(REDIS_NOTICE, "progress: [processed:%ld] [skipped:%ld] [filesize:%ld] [postion:%ld] [diff:%ld]", \
+    refresh_aof_stat(ctx);
+    perr("progress: [processed:%ld] [skipped:%ld] [filesize:%ld] [postion:%ld] [diff:%ld]", \
         ctx->processed_cmd, ctx->skipped_cmd, (long)ctx->size, (long)ctx->pos, (long)ctx->diff);
     return;
 }
 
-void processAppendOnlyFile(replayCtx *ctx)
+void process_aof(replay_ctx* ctx)
 {
-
     unsigned long loops = 0;
     int j, argc;
     int cmds = 0;
-    sds * argv = NULL;
+    sds*  argv = NULL;
 
     //long long getcommand = 0;
     //long long runcommand = 0;
     //long long aftercommand = 0;
 
-    redisLog(REDIS_NOTICE, "start to process aof file: %s", ctx->filename);
+    perr("start to process aof file: %s", ctx->filename);
     while(1) {
         cmds = 0;
         while(cmds < ctx->pipe_cmds) {
-            if(getRedisCommand(ctx, &argc, &argv) != REDIS_OK) {
-                redisLog(REDIS_WARNING, "wrong format command at position %ld", (long)ctx->pos);
+            if (get_redis_command(ctx, &argc, &argv) != REDIS_OK) {
+                perr("wrong format command at position %ld", (long)ctx->pos);
                 //printf("wrong format command at %x\n", ctx->pos);
                 goto error;
             }
 
-            if(argv == NULL) {
+            if (argv == NULL) {
                 usleep(1000000);
                 break;
             }
 
-            if(argc > 1 && ctx->filter != NULL) {
-                if(strncasecmp(ctx->filter, argv[1], sdslen(ctx->filter))) {
+            if (argc > 1 && ctx->filter != NULL) {
+                if (strncasecmp(ctx->filter, argv[1], sdslen(ctx->filter))) {
                     ctx->skipped_cmd += 1;
-                    safeFreeArgvs(argc, argv);
+                    safe_free_args(argc, argv);
                     continue;
                 }
             }
 
             if (!supported(argv[0])) {
-                sds cmd = sdsjoin(argv, argc, " ");
-                redisLog(REDIS_NOTICE, "unsupported cmd found: %s", cmd);
+                sds cmd = sdsjoin(argv, argc, (char*)(" "));
+                perr("unsupported cmd found: %s", cmd);
                 sdsfree(cmd);
                 ctx->skipped_cmd += 1;
             } else if (!strcasecmp(argv[0], "MSET") || !strcasecmp(argv[0], "MSETNX")) {
-                char ** subargv = NULL;
-                size_t * subargvlen = NULL;
+                char** subargv = NULL;
+                size_t* subargvlen = NULL;
                 for(j = 1; j < argc; j++) {
-                    subargv = (char **)malloc(3 * sizeof(char *));
+                    subargv = (char**)malloc(3 * sizeof(char*));
                     if (subargv == NULL) {
                         goto error;
                     }
 
                     subargvlen = malloc(3 * sizeof(size_t));
-                    if(subargvlen == NULL) {
+                    if (subargvlen == NULL) {
                         free(subargv);
                         goto error;
                     }
@@ -584,8 +558,8 @@ void processAppendOnlyFile(replayCtx *ctx)
                     subargvlen[1] = sdslen(subargv[1]);
                     subargvlen[2] = sdslen(subargv[2]);
 
-                    if(redisAppendCommandArgv(ctx->redis, 3, (const char **)subargv, subargvlen) != REDIS_OK) {
-                        redisLog(REDIS_WARNING, "failed to append sub command to redis output buffer");
+                    if (redisAppendCommandArgv(ctx->redis, 3, (const char**)subargv, subargvlen) != REDIS_OK) {
+                        perr("failed to append sub command to redis output buffer");
                         goto error;
                     }
 
@@ -594,8 +568,8 @@ void processAppendOnlyFile(replayCtx *ctx)
                     ++cmds;
                 }
             } else {
-                size_t *argvlen = malloc(argc * sizeof(size_t));
-                if(argvlen == NULL) {
+                size_t* argvlen = malloc(argc*  sizeof(size_t));
+                if (argvlen == NULL) {
                     goto error;
                 }
 
@@ -603,21 +577,21 @@ void processAppendOnlyFile(replayCtx *ctx)
                     argvlen[j] = sdslen(argv[j]);
                 }
 
-                if(redisAppendCommandArgv(ctx->redis, argc, (const char **)argv, argvlen) != REDIS_OK) {
-                    redisLog(REDIS_WARNING, "failed to append command to redis output buffer");
+                if (redisAppendCommandArgv(ctx->redis, argc, (const char**)argv, argvlen) != REDIS_OK) {
+                    perr("failed to append command to redis output buffer");
                     goto error;
                 }
                 free(argvlen);
                 argvlen = NULL;
                 ++cmds;
             }
-            safeFreeArgvs(argc, argv);
+            safe_free_args(argc, argv);
         }
 
-        redisLog(REDIS_DEBUG, "%d commands sent in this loop", cmds);
+        pinfo("%d commands sent in this loop", cmds);
 
         for(int i = 0; i < cmds; i++) {
-            if(getPipeReply(ctx) != REDIS_OK) {
+            if (get_pipe_reply(ctx) != REDIS_OK) {
                 goto error;
             }
         }
@@ -625,10 +599,9 @@ void processAppendOnlyFile(replayCtx *ctx)
         loops += (cmds + 1);
         ctx->processed_cmd += cmds;
 
-        refreshAppendOnlyFileStat(ctx);
-        if( (loops >= 10000) || (ctx->diff < REDIS_AOF_COMMAND_THRESHOLD) ) {
-            //redisLog(REDIS_NOTICE, "process: %d:%d", ctx->pos, ctx->size);
-            redisLog(REDIS_NOTICE, "progress: [processed:%ld] [skipped:%ld] [filesize:%ld] [postion:%ld] [diff:%ld]", \
+        refresh_aof_stat(ctx);
+        if ((loops >= 10000) || (ctx->diff < REDIS_AOF_COMMAND_THRESHOLD)) {
+            perr("progress: [processed:%ld] [skipped:%ld] [filesize:%ld] [postion:%ld] [diff:%ld]", \
                 ctx->processed_cmd, ctx->skipped_cmd, (long)ctx->size, (long)ctx->pos, (long)ctx->diff);
             loops = 0;
         }
@@ -636,209 +609,202 @@ void processAppendOnlyFile(replayCtx *ctx)
 
 error:
     return;
-
 }
 
-int pingRedis(replayCtx *ctx)
+int ping_redis(replay_ctx* ctx)
 {
-    redisContext *rc = ctx->redis;
+    redisContext* rc = ctx->redis;
     redisCommand(rc, "INFO");
-    if(rc->err) {
+    if (rc->err) {
         return REDIS_ERR;
     }
     return REDIS_OK;
 }
 
-void freeReplayCtx(replayCtx *repctx)
+void free_reply_ctx(replay_ctx* ctx)
 {
-
-    if(repctx->fp != NULL) {
-        fclose(repctx->fp);
+    if (ctx->fp != NULL) {
+        fclose(ctx->fp);
     }
 
-    if(repctx->buf != NULL) {
-        free(repctx->buf);
+    if (ctx->buf != NULL) {
+        free(ctx->buf);
     }
-    if(repctx->filename != NULL) {
-        sdsfree(repctx->filename);
-    }
-
-    if(repctx->ip != NULL) {
-        sdsfree(repctx->ip);
+    if (ctx->filename != NULL) {
+        sdsfree(ctx->filename);
     }
 
-    if(repctx->filter != NULL) {
-        sdsfree(repctx->filter);
+    if (ctx->ip != NULL) {
+        sdsfree(ctx->ip);
     }
 
-    if(repctx->prefix != NULL) {
-        sdsfree(repctx->prefix);
+    if (ctx->filter != NULL) {
+        sdsfree(ctx->filter);
     }
 
-    if(repctx->replace_prefix != NULL) {
-        sdsfree(repctx->replace_prefix);
+    if (ctx->prefix != NULL) {
+        sdsfree(ctx->prefix);
     }
 
-    if(repctx->redis != NULL) {
-        redisFree(repctx->redis);
+    if (ctx->replace_prefix != NULL) {
+        sdsfree(ctx->replace_prefix);
+    }
+
+    if (ctx->redis != NULL) {
+        redisFree(ctx->redis);
     }
 }
 
-replayCtx *initReplayCtx(Config * config)
+replay_ctx* init_replay_ctx(config* conf)
 {
-
-    replayCtx *repctx = (replayCtx*)malloc(sizeof(replayCtx));
-    if (NULL == repctx) {
-        //redisLog(REDIS_WARNING, "Failed to malloc replayCtx");
-        redisLog(REDIS_WARNING, "Failed to malloc replayCtx");
+    replay_ctx* ctx = (replay_ctx*)malloc(sizeof(replay_ctx));
+    if (NULL == ctx) {
+        perr("Failed to malloc replay_ctx");
         return NULL;
     }
 
-    repctx->filename = sdsnew(config->filename);
-    repctx->fp = fopen(repctx->filename, "r+");
-    if (repctx->fp == NULL) {
-        //redisLog(REDIS_WARNING, "Cannot open file: %s\n", filename);
-        redisLog(REDIS_WARNING, "Cannot open file: %s", config->filename);
+    ctx->filename = sdsnew(conf->filename);
+    ctx->fp = fopen(ctx->filename, "r+");
+    if (ctx->fp == NULL) {
+        perr("Cannot open file: %s", conf->filename);
         goto error;
     }
 
     /* set large buffer for file IO */
-    repctx->buf = (void *)malloc(1024 * 1024);
-    setbuf(repctx->fp, repctx->buf);
+    ctx->buf = (void*)malloc(1024 * 1024);
+    setbuf(ctx->fp, ctx->buf);
 
-    char *p = config->host;
-    char *s = strchr(p, ':');
+    char* p = conf->host;
+    char* s = strchr(p, ':');
     *s = '\0';
-    repctx->ip = sdsnew(p);
-    repctx->port = atoi(s+1);
+    ctx->ip = sdsnew(p);
+    ctx->port = atoi(s+1);
 
-    repctx->pos = 0;
-    repctx->processed_cmd = 0;
-    repctx->skipped_cmd = 0;
+    ctx->pos = 0;
+    ctx->processed_cmd = 0;
+    ctx->skipped_cmd = 0;
 
-    repctx->pipe_cmds = config->pipe_cmds;
+    ctx->pipe_cmds = conf->pipe_cmds;
 
-    repctx->prefix = NULL;
-    repctx->replace_prefix = NULL;
-    if (config->prefix != NULL && config->replace_prefix != NULL) {
-        repctx->prefix = sdsnew(config->prefix);
-        repctx->replace_prefix = sdsnew(config->replace_prefix);
+    ctx->prefix = NULL;
+    ctx->replace_prefix = NULL;
+    if (conf->prefix != NULL && conf->replace_prefix != NULL) {
+        ctx->prefix = sdsnew(conf->prefix);
+        ctx->replace_prefix = sdsnew(conf->replace_prefix);
     }
 
-    repctx->filter = NULL;
-    if (config->filter != NULL) {
-        repctx->filter = sdsnew(config->filter);
+    ctx->filter = NULL;
+    if (conf->filter != NULL) {
+        ctx->filter = sdsnew(conf->filter);
     }
 
-    refreshAppendOnlyFileStat(repctx);
+    refresh_aof_stat(ctx);
 
-    repctx->redis = redisConnect(repctx->ip, repctx->port);
-    if (repctx->redis->err) {
-        //redisLog(REDIS_WARNING, "Cannot stat file: %s\n", filename);
-        redisLog(REDIS_WARNING, "failed to connecto to %s:%d\n", repctx->ip, repctx->port);
+    ctx->redis = redisConnect(ctx->ip, ctx->port);
+    if (ctx->redis->err) {
+        perr("failed to connecto to %s:%d\n", ctx->ip, ctx->port);
         goto error;
     }
-    return repctx;
+    return ctx;
 
 error:
-    freeReplayCtx(repctx);
+    free_reply_ctx(ctx);
     return NULL;
-
 }
 
-void parseArgs(int argc, char **argv, Config *config)
+void parse_args(int argc, char** argv, config* conf)
 {
-
-    config->filename = NULL;
-    config->host = NULL;
-    config->filter = NULL;
-    config->prefix = NULL;
-    config->replace_prefix = NULL;
-    config->pipe_cmds = REPLAY_DEFAULT_PIPE_CMDS;
-    config->verbose = 0;
-    config->only_check = 0;
+    conf->filename = NULL;
+    conf->host = NULL;
+    conf->filter = NULL;
+    conf->prefix = NULL;
+    conf->replace_prefix = NULL;
+    conf->pipe_cmds = REPLAY_DEFAULT_PIPE_CMDS;
+    conf->verbose = 0;
+    conf->only_check = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--file") == 0) {
-            config->filename = argv[i+1];
+            conf->filename = argv[i+1];
             ++i;
         }
 
         if (strcmp(argv[i], "--dest") == 0) {
-            config->host = argv[i+1];
+            conf->host = argv[i+1];
             ++i;
         }
 
         if (strcmp(argv[i], "--prefix") == 0) {
-            config->prefix = argv[i+1];
+            conf->prefix = argv[i+1];
             ++i;
         }
 
         if (strcmp(argv[i], "--replace_prefix") == 0) {
-            config->replace_prefix = argv[i+1];
+            conf->replace_prefix = argv[i+1];
             ++i;
         }
 
         if (strcmp(argv[i], "--pipe_cmds") == 0) {
-            config->pipe_cmds = atoi(argv[i+1]);
+            conf->pipe_cmds = atoi(argv[i+1]);
             ++i;
         }
         if (strcmp(argv[i], "--filter") == 0) {
-            config->filter = argv[i+1];
+            conf->filter = argv[i+1];
             ++i;
         }
         if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
-            config->verbose = 1;
+            conf->verbose = 1;
         }
         if (strcmp(argv[i], "--only_check") == 0) {
-            config->only_check = 1;
+            conf->only_check = 1;
         }
     }
 }
 
-int main(int argc, char **argv) {
+void show_usage(char** argv)
+{
+    pline("Usage: %s", argv[0]);
+    pline("\t\t--file <file.aof>: aof file");
+    pline("\t\t--dest <ip:port>: the target ip & port");
+    pline("\t\t[--filter <filter>]: key prefix filter, only the keys match this filter would be processed");
+    pline("\t\t[--prefix <prefix>]: old key prefix to be replaced");
+    pline("\t\t[--replace_prefix <replace>]: new key prefix to be used");
+    pline("\t\t[--pipe_cmds <cmds>]: cmds number for pipeline");
+    pline("\t\t[--only_check]: only do check");
+    pline("\t\t[-v|--verbose]");
+}
 
-    replayCtx * repctx = NULL;
+int main(int argc, char** argv)
+{
+    replay_ctx* ctx = NULL;
     if (argc < 4) {
-        printf("Usage: %s\n", argv[0]);
-        printf("\t\t--file <file.aof>: aof file\n");
-        printf("\t\t--dest <ip:port>: the target ip & port\n");
-        printf("\t\t[--filter <filter>]: key prefix filter, only the keys match this filter would be processed\n");
-        printf("\t\t[--prefix <prefix>]: old key prefix to be replaced\n");
-        printf("\t\t[--replace_prefix <replace>]: new key prefix to be used\n");
-        printf("\t\t[--pipe_cmds <cmds>]: cmds number for pipeline\n");
-        printf("\t\t[--only_check]: only do check\n");
-        printf("\t\t[-v|--verbose]\n");
-        exit(1);
-    } 
-
-    Config * config = (Config *)malloc(sizeof(Config));
-    if (config == NULL) {
+        show_usage(argv);
         exit(1);
     }
 
-    parseArgs(argc, argv, config);
-    if (config->filename == NULL || config->host == NULL) {
+    config* conf = (config*)malloc(sizeof(config));
+    if (conf == NULL) {
         exit(1);
     }
 
-    if(config->verbose) {
-        loglevel = REDIS_VERBOSE;
-    }
-
-    repctx = initReplayCtx(config);
-    if(repctx == NULL) {
-        redisLog(REDIS_WARNING, "failed to init replay context");
+    parse_args(argc, argv, conf);
+    if (conf->filename == NULL || conf->host == NULL) {
         exit(1);
     }
 
-    int only_check = config->only_check;
-    free(config);
+    ctx = init_replay_ctx(conf);
+    if (ctx == NULL) {
+        perr("failed to init replay context");
+        exit(1);
+    }
 
-    if( only_check ) {
-        checkAppendOnlyFile(repctx);
+    int only_check = conf->only_check;
+    free(conf);
+
+    if (only_check) {
+        check_aof(ctx);
     } else {
-        processAppendOnlyFile(repctx);
+        process_aof(ctx);
     }
 
     return 0;
