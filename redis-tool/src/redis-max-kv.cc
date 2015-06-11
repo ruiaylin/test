@@ -24,17 +24,18 @@ using namespace std;
 
 void insert(redis_instance& inst, string& key, string& value);
 void get(redis_instance& inst, string& key, string& value);
+void hgetall(redis_instance& inst, string& key);
 
 int main(int argc, char** argv)
 {
-    if (argc < 3) {
-        FATAL("Right usage: ./redis-max-kv ip port");
+    if (argc < 4) {
+        FATAL("Right usage: ./redis-max-kv ip port password");
         return -1;
     }
 
     char* ip = argv[1];
     unsigned short port = (unsigned short)strtoul(argv[2], (char**)NULL, 10);
-    char* password = NULL;
+    char* password = argv[4];
     unsigned db= 0;
 
     redis_instance inst = {0};
@@ -52,6 +53,9 @@ int main(int argc, char** argv)
     string str("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");
     string key;
     std::string value;
+
+    key = "fruit";
+    hgetall(inst, key);
 
     // 16k
     key = "16K";
@@ -117,6 +121,14 @@ void get(redis_instance& inst, string& key, string& value)
     assert(reply->type == REDIS_REPLY_STRING);
     value = reply->str;
     pline("get %s result %zu", key.c_str(), value.size());
+    freeReplyObject(reply);
+}
+
+void hgetall(redis_instance& inst, string& key)
+{
+    redisReply* reply;
+    reply = (redisReply*)redisCommand(inst.cxt, "hgetall %s", key.c_str());
+    assert(reply != NULL);
     freeReplyObject(reply);
 }
 

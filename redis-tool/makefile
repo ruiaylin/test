@@ -14,7 +14,7 @@ SRC_DIR     = src
 OBJ_DIR     = obj
 LIB_DIR     = lib
 BIN_DIR     = bin
-BIN         = redis-replay-aof #redis-dump redis-dump-key redis-migrate redis-max-kv
+BIN         = redis-replay-aof redis-dump redis-dump-key redis-migrate redis-max-kv
 
 BASE_PATH   =
 

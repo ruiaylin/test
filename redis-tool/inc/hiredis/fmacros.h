@@ -1,9 +1,12 @@
 #ifndef __HIREDIS_FMACRO_H
 #define __HIREDIS_FMACRO_H
 
-#if defined(__linux__)
+#if !defined(_BSD_SOURCE)
 #define _BSD_SOURCE
-#define _DEFAULT_SOURCE
+#endif
+
+#if defined(_AIX)
+#define _ALL_SOURCE
 #endif
 
 #if defined(__sun__)
