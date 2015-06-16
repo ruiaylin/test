@@ -4,6 +4,9 @@
 #ifndef ZMALLOC_H
 #define ZMALLOC_H
 
+#include <stdlib.h>
+
+#define nil NULL
 #define zmalloc malloc
 #define zrealloc realloc
 #define zcalloc(x) calloc(x,1)

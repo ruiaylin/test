@@ -33,17 +33,6 @@
 
 #define SCAN_INC            10
 
-#define pline(fmt, ...)     printf(fmt"\n", ##__VA_ARGS__)
-#define pinfo(fmt, ...)     printf("%s-%s-%d: "fmt"\n", ((char*)__FILE__),     \
-                                  (char*)__func__, (int)__LINE__, ##__VA_ARGS__)
-#define perr(fmt, ...)     \
-    fprintf(stderr, "\033[1;31;40m%s-%s-%d: error: "fmt"\033[0m\n", \
-            (char*)__FILE__, (char*)__func__, (int)__LINE__, ##__VA_ARGS__)
-
-
-#define FATAL               perr
-#define DEBUG               pinfo
-
 #define PRINT_REPLY_ERROR(reply) do { \
     if (reply && reply->type == REDIS_REPLY_ERROR && reply->len && reply->str) { \
         FATAL("reply error:%s", reply->str); \
