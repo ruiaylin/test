@@ -16,8 +16,8 @@ TEST_DIR    = test
 OBJ_DIR     = obj
 LIB_DIR     = lib
 BIN_DIR     = bin
-BIN         = async
-# redis-replay-aof redis-dump redis-dump-key redis-migrate redis-max-kv async
+BIN         = async-test
+# redis-replay-aof redis-dump redis-dump-key redis-migrate redis-max-kv async-test
 
 BASE_PATH   =
 
@@ -65,7 +65,7 @@ $(BIN_DIR)/redis-max-kv:$(addprefix $(OBJ_DIR)/, tool.o redis-max-kv.o)
 $(BIN_DIR)/redis-replay-aof:$(addprefix $(OBJ_DIR)/, redis-replay-aof.o)
 	$(CC) $(CCFLAG) $(CC_MACRO) -o $@ $^ $(LIB)
 
-$(BIN_DIR)/async:$(addprefix $(OBJ_DIR)/, async.o ae.o anet.o)
+$(BIN_DIR)/async-test:$(addprefix $(OBJ_DIR)/, async-test.o ae.o anet.o)
 	$(CC) $(CCFLAG) $(CC_MACRO) -o $@ $^ $(LIB)
 
 strip:

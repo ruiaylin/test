@@ -33,7 +33,15 @@ void disconnect_callback(const redisAsyncContext *c, int status) {
         printf("Error: %s\n", c->errstr);
         return;
     }
+
     printf("Disconnected...\n");
+
+    config_p conf = (config_p)(c->data);
+    if (!conf) {
+        return;
+    }
+
+    aeStop(conf->event_loop);
 }
 
 static void auth_callback(redisAsyncContext *c, void *r, void *privdata) {
@@ -91,7 +99,10 @@ static void signal_handle(int sig) {
     }
 
     conf->stop = 1;
-    aeStop(conf->event_loop);
+    aeStop(conf->event_loop); // stop loop, aeMain will check this flag
+    aeDeleteEventLoop(conf->event_loop); // free event loop
+    redisAsyncFree(conf->clt); // free async context
+    exit(1);
 }
 
 int main (int argc, char **argv) {
