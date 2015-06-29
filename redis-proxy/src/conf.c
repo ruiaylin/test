@@ -30,18 +30,6 @@
     ((char*)(ptr0) - (char*)(ptr1)));              \
 })
 
-#define CMP(dst, src, len) ({                    \
-    int __cmp_flag__ = -2;                       \
-    if ((unsigned)(len))) {                      \
-        __cmp_flag__ = memcmp(                   \
-                            (void*)(dst),        \
-                            (void*)(src),        \
-                            (size_t)(len)        \
-                            );                   \
-    }                                            \
-    __cmp_flag__;                                \
-})
-
 static int getLineKey(char* line, char** key, size_t* size);
 static int getLineValue(char* line, char** value, size_t* size);
 static int isComment(const char* buf, size_t buf_len);
