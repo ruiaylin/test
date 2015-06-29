@@ -10,7 +10,7 @@
 #include "log.h"
 #include "conf.h"
 
-void conf_test(char* file);
+void confTest(char* file);
 
 int main(int argc, char** argv)
 {
@@ -23,12 +23,12 @@ int main(int argc, char** argv)
     file = argv[1];
 
     pinfo("print values of the defined key:");
-    conf_test(file);
+    confTest(file);
 
     return 0;
 }
 
-void conf_test(char* file)
+void confTest(char* file)
 {
     int         idx;
     int         ret;
@@ -38,39 +38,39 @@ void conf_test(char* file)
     char*       key1;
     const char* value;
 
-    ret = conf_init(&conf, file);
+    ret = confInit(&conf, file);
     if (ret) {
-        perr("conf_init(file = %s, conf = %p) = %d", file, &conf, ret);
+        perr("confInit(file = %s, conf = %p) = %d", file, &conf, ret);
         return;
     }
 
     // not exist
     key = "im.max.uid";
-    value = conf_get_value(conf, key, "");
+    value = confGetValue(conf, key, "");
     pinfo("key %s, value %s", key, value);
 
     // default
     key = "hello";
-    value = conf_get_value(conf, key, "");
+    value = confGetValue(conf, key, "");
     pinfo("key %s, value %s", key, value);
     key = "homedir";
-    value = conf_get_value(conf, key, "");
+    value = confGetValue(conf, key, "");
     pinfo("key %s, value %s", key, value);
 
     // over
     key = "over";
     key1 = "path";
-    value = conf_get_value(conf, key, key1);
+    value = confGetValue(conf, key, key1);
     pinfo("key %s-%s, value %s", key, key1, value);
 
     idx = 0;
     key1 = "array";
-    ret = conf_get_array_size(conf, key, key1, &size);
+    ret = confGetArraySize(conf, key, key1, &size);
     if (!ret) {
         pinfo("key %s-%s, array size: %d", key, key1, size);
     }
     do {
-        value = conf_get_array_value(conf, key, key1, idx);
+        value = confGetArrayValue(conf, key, key1, idx);
         if (!value) {
             break;
         }
@@ -79,6 +79,6 @@ void conf_test(char* file)
         idx++;
     } while(1);
 
-    conf_uninit(&conf);
+    confUninit(&conf);
 }
 

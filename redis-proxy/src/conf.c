@@ -42,11 +42,11 @@
     __cmp_flag__;                                \
 })
 
-static int get_line_key(char* line, char** key, size_t* size);
-static int get_line_value(char* line, char** value, size_t* size);
-static int is_comment(const char* buf, size_t buf_len);
-static int parse_line(dict* dt, sds line);
-static int parse_array(dict* dt, sds key, sds value);
+static int getLineKey(char* line, char** key, size_t* size);
+static int getLineValue(char* line, char** value, size_t* size);
+static int isComment(const char* buf, size_t buf_len);
+static int parseLine(dict* dt, sds line);
+static int parseArray(dict* dt, sds key, sds value);
 
 #define COMMENT_CHAR0       '#'
 #define KEY_CHAR1           '['
@@ -59,7 +59,7 @@ static int parse_array(dict* dt, sds key, sds value);
 
 static const char* suffix = "__lisk_array_size_suffix__";
 
-int get_line_key(char* line, char** key, size_t* size)
+int getLineKey(char* line, char** key, size_t* size)
 {
     char  equal0;
     char  equal1;
@@ -83,7 +83,7 @@ int get_line_key(char* line, char** key, size_t* size)
     return 0;
 }
 
-int get_line_value(char* line, char** value, size_t* value_size)
+int getLineValue(char* line, char** value, size_t* value_size)
 {
     char        equal0;
     char        equal1;
@@ -113,7 +113,7 @@ int get_line_value(char* line, char** value, size_t* value_size)
     return 0;
 }
 
-int is_comment(const char* buf, size_t buf_len)
+int isComment(const char* buf, size_t buf_len)
 {
     int ret = 0;
 
@@ -125,7 +125,7 @@ int is_comment(const char* buf, size_t buf_len)
     return ret;
 }
 
-int is_first_key(const char* buf, unsigned buf_len)
+int isFirstKey(const char* buf, unsigned buf_len)
 {
     int ret = 0;
 
@@ -137,7 +137,7 @@ int is_first_key(const char* buf, unsigned buf_len)
     return ret;
 }
 
-int parse_line(dict* dt, sds line)
+int parseLine(dict* dt, sds line)
 {
     static char first_key[1024] = {DEFAULT_FIRST_KEY};
     do {
@@ -145,7 +145,7 @@ int parse_line(dict* dt, sds line)
             break;
         }
 
-        int ret = is_comment((char*)line, sdslen(line));
+        int ret = isComment((char*)line, sdslen(line));
         if (!ret) {
             break;
         }
@@ -156,7 +156,7 @@ int parse_line(dict* dt, sds line)
         }
 
         // get first key
-        ret = is_first_key((char*)(line), sdslen(line));
+        ret = isFirstKey((char*)(line), sdslen(line));
         if (!ret) {
             ((char*)line)[sdslen(line)-1] = '\0';
             snprintf(first_key, sizeof(first_key), "%s", (char*)(line) + 1);
@@ -167,15 +167,16 @@ int parse_line(dict* dt, sds line)
         sds key = sdsnewlen(first_key, strlen(first_key));
         char* key_str;
         size_t length;
-        ret = get_line_key((char*)(line), &key_str, &length);
+        ret = getLineKey((char*)(line), &key_str, &length);
         if (ret || !length) {
+            sdsfree(key);
             break;
         }
         sdscatlen(key, (void*)(key_str), length);
 
         // value
         char* value_str;
-        ret = get_line_value((char*)(line), &value_str, &length);
+        ret = getLineValue((char*)(line), &value_str, &length);
         if (ret || !length) {
             sdsfree(key);
             continue;
@@ -183,13 +184,13 @@ int parse_line(dict* dt, sds line)
         sds value = sdsnewlen(value_str, length);
 
         dictAdd(dt, (void*)(key), (void*)(value));
-        parse_array(dt, key, value);
+        parseArray(dt, key, value);
     } while(0);
 
     return 0;
 }
 
-int parse_array(dict* dt, sds key, sds value)
+int parseArray(dict* dt, sds key, sds value)
 {
     char* key_str = key;
     char* value_str = value;
@@ -242,7 +243,7 @@ int parse_array(dict* dt, sds key, sds value)
     return 0;
 }
 
-int file_get_line(int fd, sds line)
+int fileGetLine(int fd, sds line)
 {
     off_t cursor = lseek(fd, 0, SEEK_CUR);
     if (cursor < 0) {
@@ -294,11 +295,11 @@ int file_get_line(int fd, sds line)
     return 0;
 }
 
-unsigned int conf_sds_hash(const void *key) {
+unsigned int confSdsHash(const void *key) {
     return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
 }
 
-static int conf_sds_key_compare(
+static int confSdsKeyCompare(
 	void *privdata, const void *key1, const void *key2)
 {
     int l1,l2;
@@ -310,7 +311,7 @@ static int conf_sds_key_compare(
     return memcmp(key1, key2, l1) == 0;
 }
 
-static void conf_sds_destructor(void *privdata, void *val)
+static void confSdsDestructor(void *privdata, void *val)
 {
     DICT_NOTUSED(privdata);
 
@@ -318,33 +319,33 @@ static void conf_sds_destructor(void *privdata, void *val)
 }
 
 /* Db->dict, keys are sds strings, vals are Redis objects. */
-static dictType conf_dict_type = {
-    conf_sds_hash,                /* hash function */
+static dictType confDictType = {
+    confSdsHash,                /* hash function */
     NULL,                       /* key dup */
     NULL,                       /* val dup */
-    conf_sds_key_compare,          /* key compare */
-    conf_sds_destructor,          /* key destructor */
-    conf_sds_destructor           /* val destructor */
+    confSdsKeyCompare,          /* key compare */
+    confSdsDestructor,          /* key destructor */
+    confSdsDestructor           /* val destructor */
 };
 
-int conf_init(void** conf_pptr, char* file)
+int confInit(void** conf_pptr, char* file)
 {
     if (!(file) && !(conf_pptr)) {
         perr("@file = %p, @dict = %p", (void*)file, (void*)conf_pptr);
         return -1;
     }
 
-    dict* dt = dictCreate(&conf_dict_type, NULL);
+    dict* dt = dictCreate(&confDictType, NULL);
     int fd = open(file, O_RDONLY);
     sds line = sdsnewlen(NULL, 96);
     do {
         sdsclear(line);
-        int ret = file_get_line(fd, line);
+        int ret = fileGetLine(fd, line);
         if (ret) {
             break;
         }
 
-        parse_line(dt, line);
+        parseLine(dt, line);
     } while (1);
     int ret = 0;
     if (!dictSize(dt)) {
@@ -359,7 +360,7 @@ int conf_init(void** conf_pptr, char* file)
     return ret;
 }
 
-void conf_uninit(void** conf_pptr)
+void confUninit(void** conf_pptr)
 {
     if (conf_pptr && *conf_pptr) {
         // dictEntry* de;
@@ -374,7 +375,7 @@ void conf_uninit(void** conf_pptr)
     }
 }
 
-const char* conf_get_value(void* dict, const char* key_str0, const char* key_str1)
+const char* confGetValue(void* dict, const char* key_str0, const char* key_str1)
 {
     if (!dict || !key_str0 || !key_str1) {
         perr("@dict = %p, @key_str0 = %p, @key_str1 = %p", dict, key_str0, key_str1);
@@ -398,7 +399,7 @@ const char* conf_get_value(void* dict, const char* key_str0, const char* key_str
     return dictGetVal(de);
 }
 
-const char* conf_get_array_value(void* dict, const char* key_str0, const char* key_str1, int idx)
+const char* confGetArrayValue(void* dict, const char* key_str0, const char* key_str1, int idx)
 {
     if (!(dict) || !(key_str0) || !(key_str1)) {
         perr("@dict = %p, @key0 = %p, @key1 = %p", dict, key_str0, key_str1);
@@ -423,7 +424,7 @@ const char* conf_get_array_value(void* dict, const char* key_str0, const char* k
     return dictGetVal(de);
 }
 
-int conf_get_array_size(void* dict, const char* key_str0, const char* key_str1, size_t* size)
+int confGetArraySize(void* dict, const char* key_str0, const char* key_str1, size_t* size)
 {
     if (!(dict) || !(key_str0) || !(key_str1) ||!(size)) {
         perr("@dict = %p, @key0 = %p, @key1 = %p, @size = %p",

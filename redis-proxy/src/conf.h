@@ -23,7 +23,7 @@
  *                  otherwise -1 if params are illegal or -2 if @file
  *                  does not exist or it does not have any configure key-value.
  **/
-int conf_init(void** conf, char* file);
+int confInit(void** conf, char* file);
 /**
  * description    : free the dictionary @conf <br/><br/>
  *
@@ -31,7 +31,7 @@ int conf_init(void** conf, char* file);
  *
  * out@ret        : return is void
  **/
-void conf_uninit(void** dict);
+void confUninit(void** dict);
 /**
  * description    : get value of the @key0+@key1 from the dictionary @conf <br/><br/>
  *
@@ -42,7 +42,7 @@ void conf_uninit(void** dict);
  * out@ret        : if the dictionary @conf is complete and there is value of @key,
  *                  the return is its value, otherwise nil instead.
  **/
-const char* conf_get_value(void* conf, const char* key0, const char* key1);
+const char* confGetValue(void* conf, const char* key0, const char* key1);
 /**
  * description    : get the @index-th element of the @key0+@key1 from the dictionary
  *                  @conf <br/><br/>
@@ -57,24 +57,23 @@ const char* conf_get_value(void* conf, const char* key0, const char* key1);
  *                  related array, the return value is what you wanna, otherwise
  *                  it is nil.
  **/
-const char* conf_get_array_value(void* conf, const char* key0, const char* key1, int index);
+const char* confGetArrayValue(void* conf, const char* key0, const char* key1, int index);
 /**
  * description    : get the size of @key0+@key1's value array. <br/><br/>
  *
  * in@conf        : configure dictionary
  * in@key0        : first key
  * in@key1        : second key
-
  * in-out@szie    : array size
  *
  * out@ret        : if successful, ret is 0; otherwise -1 if some parameters
  *                  are illegal.
  **/
-int conf_get_array_size(void* conf, const char* key0, const char* key1, size_t* size);
+int confGetArraySize(void* conf, const char* key0, const char* key1, size_t* size);
 
 #define CONF_VALUE(dict, key0, key1) ({                             \
     const char* __conf_ret__ = nil_str;                             \
-    __conf_ret__ = conf_get_value(                                  \
+    __conf_ret__ = confGetValue(                                    \
                                   (void*)(dict),                    \
                                   (const char*)key0,                \
                                   (const char*)key1                 \
@@ -87,7 +86,7 @@ int conf_get_array_size(void* conf, const char* key0, const char* key1, size_t* 
 
 #define CONF_ARRAY_VALUE(dict, key0, key1, idx) ({                  \
     const char* __conf_ret__ = nil_str;                             \
-    __conf_ret__ = conf_get_array_value(                            \
+    __conf_ret__ = confGetArrayValue(                               \
                                         (void*)(dict),              \
                                         (const char*)key0,          \
                                         (const char*)key1,          \
@@ -101,7 +100,7 @@ int conf_get_array_size(void* conf, const char* key0, const char* key1, size_t* 
 
 #define CONF_ARRAY_SIZE(dict, key0, key1) ({                        \
     size_t __conf_size__ = 0;                                       \
-    conf_get_array_size(                                            \
+    confGetArraySize(                                               \
                         (void*)(dict),                              \
                         (const char*)(key0),                        \
                         (const char*)(key1),                        \
@@ -110,4 +109,3 @@ int conf_get_array_size(void* conf, const char* key0, const char* key1, size_t* 
 })
 
 #endif
-
