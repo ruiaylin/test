@@ -991,6 +991,49 @@ void sentinelHandleRedisInstance(sentinelRedisInstance *ri) {
 	}
 }
 
+在sentinel tilt模式下，下面两个函数的行为受到了影响：
+/* 
+ *不能进行master是否进入down状态的判断
+ */
+void sentinelCommand(redisClient *c) {
+	if (!strcasecmp(c->argv[1]->ptr, "is-master-down-by-addr")) {
+		/* SENTINEL IS-MASTER-DOWN-BY-ADDR <ip> <port> <current-epoch> <runid>*/
+		int isdown = 0;
+		ri = getSentinelRedisInstanceByAddrAndRunID(sentinel.masters,
+			c->argv[2]->ptr, port, NULL);
+
+		/* It exists? Is actually a master? Is subjectively down? It's down.
+		 * Note: if we are in tilt mode we always reply with "0". */
+		if (!sentinel.tilt && ri && (ri->flags & SRI_S_DOWN) &&
+			(ri->flags & SRI_MASTER))
+			isdown = 1;
+	}
+}
+
+/*
+ * 不能进行master到slave状态的切换
+ * 不能进行slave到master状态的切换
+ * 不能对slave变换新的master
+ * 不能让slave处理客户端发来的config命令
+ */
+void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
+	/* Process line by line. */
+	lines = sdssplitlen(info, strlen(info), "\r\n", 2, &numlines);
+	for (j = 0; j < numlines; j++) {
+		/* None of the following conditions are processed when in tilt mode, so
+		 * return asap. */
+		if (sentinel.tilt) return;
+
+		/* Handle master -> slave role switch. */
+		/* Handle slave -> master role switch. */
+		/* Handle slaves replicating to a different master address. */
+		/* Detect if the slave that is in the process of being reconfigured
+		 * changed state. */
+	}
+}
+
+
+
 主要参考文档：
 1 redis/src/sentinel.c
 2 http://blog.csdn.net/yfkiss/article/details/22151175
