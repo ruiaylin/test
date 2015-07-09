@@ -1032,6 +1032,33 @@ void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
 	}
 }
 
+6.2 检查所有的redis instance的状态
+
+/* Perform scheduled operations for all the instances in the dictionary.
+* Recursively call the function against dictionaries of slaves. */
+void sentinelHandleDictOfRedisInstances(dict *instances) {
+	dictIterator *di;
+	dictEntry *de;
+	sentinelRedisInstance *switch_to_promoted = NULL;
+
+	/* There are a number of things we need to perform against every master. */
+	di = dictGetIterator(instances);
+	while ((de = dictNext(di)) != NULL) {
+		sentinelRedisInstance *ri = dictGetVal(de);
+
+		sentinelHandleRedisInstance(ri);
+		if (ri->flags & SRI_MASTER) {
+			sentinelHandleDictOfRedisInstances(ri->slaves);
+			sentinelHandleDictOfRedisInstances(ri->sentinels);
+			if (ri->failover_state == SENTINEL_FAILOVER_STATE_UPDATE_CONFIG) {
+				switch_to_promoted = ri;
+			}
+		}
+	}
+	if (switch_to_promoted)
+		sentinelFailoverSwitchToPromotedSlave(switch_to_promoted);
+	dictReleaseIterator(di);
+}
 
 
 主要参考文档：
