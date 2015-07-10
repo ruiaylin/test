@@ -1,8 +1,7 @@
-# redis sentinel 源码分析#
+# redis sentinel 源码分析
+---
 
-<font color=red>
- ##0 主要数据结构
-</font>
+##0 主要数据结构
 
 <font color=blue>
  >此处首先是sentinel实例，其地位就相当于redis-server模式下的server对象。sentinel实例比较重要的成员就是masters，里面存储了所有的redis主从对的主sri，其key是主sri的name，value就是主sri。
@@ -23,6 +22,8 @@
 <font color=blue>
  其次是是sentinel实例，比较重要的成员就是sentinels和slaves，slaves里面存储了所有的redis主从对的从sri，而sentinels则存储了其他sentinel实例的sri，这两个dict的key都是sri的name，name形式是host：port。
 </font>
+
+<font color=green>
 
     typedef struct sentinelRedisInstance {
         int flags;                 // sentinel的身份，查看SRI_... 系列的定义
@@ -101,9 +102,16 @@
         char *client_reconfig_script;
     } sentinelRedisInstance;`
 
-<font color=red>
- ##1 main
 </font>
+
+
+##1 main
+
+<font color=blue>
+ sentinel启动流程
+</font>
+
+<font color=green>
 
     int main(int argc, char **argv) {
         // sentinel模式判断
@@ -138,7 +146,12 @@
         return 0;
     }
 
+</font>
+
 ##2 检查程序是否进入sentinel模式以及sentinel模式下需要完成的初始化工作
+
+<font color=green>
+
     // 创建一个server id
     int checkForSentinelMode(int argc, char **argv) {
         int j;
@@ -148,6 +161,20 @@
             if (!strcmp(argv[j],"--sentinel")) return 1;
         return 0;
     }
+
+</font>
+
+<font color=blue>
+        
+ >Linux中的随机数可以从两个特殊的文件中产生，一个是/dev/urandom.另外一个是/dev/random。他们产生随机数的原理是利用当前系统的熵池来计算出固定一定数量的随机比特，然后将这些比特作为字节流返回。
+ >
+ >熵池就是当前系统的环境噪音，熵指的是一个系统的混乱程度，系统噪音可以通过很多参数来评估，如内存的使用，文件的使用量，不同类型的进程数量等等。如果当前环境噪音变化的不是很剧烈或者当前环境噪音很小，比如刚开机的时候，而当前需要大量的随机比特，这时产生的随机数的随机效果就不是很好了。这就是为什么会有/dev/urandom和/dev/random这两种不同的文件，后者在不能产生新的随机数时会阻塞程序，而前者不会（ublock），当然产生的随机数效果就不太好了，这对加密解密这样的应用来说就不是一种很好的选择。
+ >
+ >/dev/random会阻塞当前的程序，直到根据熵池产生新的随机字节之后才返回，所以使用/dev/random比使用/dev/urandom产生大量随机数的速度要慢。
+ >
+</font>
+
+<font color=green>
 
     /*
      * 这个函数为一个redis instance生成一个160bit的id
@@ -162,18 +189,7 @@
         static int seed_initialized = 0;
         static unsigned char seed[20]; /* The SHA1 seed, from /dev/urandom. */
         static uint64_t counter = 0; /* The counter we hash with the seed. */
-
         /*  生成一个随机种子数，存储到seed里面
-        Linux中的随机数可以从两个特殊的文件中产生，一个是/dev/urandom.另外一个是/dev/random。
-        他们产生随机数的原理是利用当前系统的熵池来计算出固定一定数量的随机比特，然后将这些比特作为字节流返回。
-        熵池就是当前系统的环境噪音，熵指的是一个系统的混乱程度，系统噪音可以通过很多参数来评估，如内存的使用，
-        文件的使用量，不同类型的进程数量等等。如果当前环境噪音变化的不是很剧烈或者当前环境噪音很小，比如刚开机的时候，
-        而当前需要大量的随机比特，这时产生的随机数的随机效果就不是很好了。
-
-        这就是为什么会有/dev/urandom和/dev/random这两种不同的文件，后者在不能产生新的随机数时会阻塞程序，
-        而前者不会（ublock），当然产生的随机数效果就不太好了，这对加密解密这样的应用来说就不是一种很好的选择。
-        /dev/random会阻塞当前的程序，直到根据熵池产生新的随机字节之后才返回，所以使用/dev/random比使用
-        /dev/urandom产生大量随机数的速度要慢。 */
         if (!seed_initialized) {
             FILE *fp = fopen("/dev/urandom", "r");
             if (fp && fread(seed, sizeof(seed), 1, fp) == 1)
@@ -276,7 +292,11 @@
         sentinel.announce_port = 0;
     }
 
+</font>
+
 ##3 初始化配置
+
+<font color=green>
 
     // 从文件读取所有的字符流
     void loadServerConfig(char *filename, char *options) {
@@ -394,6 +414,11 @@
         sa->port = port;
         return sa;
     }
+
+</font>
+
+<font color=blue>
+
     // 创建一个sri
     /*
      * 这个函数用于创建一个sentinel instance，用于代表一个sentinel的监控或者联系对象，
@@ -408,6 +433,10 @@
      * 如果hostname不能被解析或者port溢出，则返回nil并且errno会被置为相关值；
      * 如果master和某个slave的name一样，则返回nil且errno为EBUSY。因为相关的hash表以name作为hash key。
      */
+</font>
+
+<font color=green>
+
     sentinelRedisInstance *createSentinelRedisInstance(char *name, int flags, char *hostname, int port, int quorum, sentinelRedisInstance *master) {
         sentinelRedisInstance *ri;
         sentinelAddr *addr;
@@ -636,9 +665,9 @@
         return NULL;
     }
 
-<font color=red>
- ##4 启动server，启动定时函数serverCron
 </font>
+
+##4 启动server，启动定时函数serverCron
 
     /* Return the UNIX time in microseconds */
     long long ustime(void) {
