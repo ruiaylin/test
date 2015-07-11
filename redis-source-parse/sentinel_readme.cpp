@@ -669,6 +669,8 @@
 
 ##4 启动server，启动定时函数serverCron
 
+<font color=green>
+
     /* Return the UNIX time in microseconds */
     long long ustime(void) {
         struct timeval tv;
@@ -815,9 +817,13 @@
         }
     }
 
+</font>
+
 <font color=red>
     !!!!注意：上面initServer中初始注册定时器函数serverCron的时候，用的时间间隔是1ms后调用这个函数，但是后面再次调用时，时间间隔是函数的返回值：
 </font>
+
+<font color=green>
 
 	/* Process time events */
     static int processTimeEvents(aeEventLoop *eventLoop) {
@@ -859,7 +865,11 @@
         return processed;
     }
 
-    5 检查监控条件
+</font>
+
+##5 检查监控条件
+
+<font color=green>
 
     // 检查configfile是否存在以及是否可写
     void sentinelIsRunning(void) {
@@ -976,8 +986,16 @@
         dictReleaseIterator(di);
     }
 
-    6 sentinel的定时处理任务
-        上面五个流程分析主要说明了sentinel启动过程中的执行步骤，下面分析sentinel启动之后的流程。
+</font>
+
+##6 sentinel的定时处理任务
+
+<font color=blue>
+
+ 上面五个流程分析主要说明了sentinel启动过程中的执行步骤，下面分析sentinel启动之后的流程。
+</font>
+
+<font color=green>
 
     void sentinelTimer(void) {
         sentinelCheckTiltCondition();
@@ -995,7 +1013,12 @@
         server.hz = REDIS_DEFAULT_HZ + rand() % REDIS_DEFAULT_HZ;
     }
 
-    6.1 tilt模式
+</font>
+
+###6.1 tilt模式
+
+<font color=green>
+
     /* 这个函数用于判断是否进入tilt模式
     *
     * 如果两次sentinelTimer调用的时间间隔太多（SENTINEL_TILT_TRIGGER = 2s）或者
@@ -1078,7 +1101,11 @@
         }
     }
 
-    6.2 检查所有的redis instance的状态
+</font>
+
+###6.2 检查所有的redis instance的状态
+
+<font color=green>
 
     /* Perform scheduled operations for all the instances in the dictionary.
     * Recursively call the function against dictionaries of slaves. */
@@ -1106,8 +1133,9 @@
         dictReleaseIterator(di);
     }
 
+</font>
 
-    主要参考文档：
+##主要参考文档：
     1 redis/src/sentinel.c
     2 http://blog.csdn.net/yfkiss/article/details/22151175
     3 http://blog.csdn.net/yfkiss/article/details/22687771
