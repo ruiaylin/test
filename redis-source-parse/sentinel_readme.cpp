@@ -165,7 +165,7 @@
 </font>
 
 <font color=blue>
-        
+
  >Linux中的随机数可以从两个特殊的文件中产生，一个是/dev/urandom.另外一个是/dev/random。他们产生随机数的原理是利用当前系统的熵池来计算出固定一定数量的随机比特，然后将这些比特作为字节流返回。
  >
  >熵池就是当前系统的环境噪音，熵指的是一个系统的混乱程度，系统噪音可以通过很多参数来评估，如内存的使用，文件的使用量，不同类型的进程数量等等。如果当前环境噪音变化的不是很剧烈或者当前环境噪音很小，比如刚开机的时候，而当前需要大量的随机比特，这时产生的随机数的随机效果就不是很好了。这就是为什么会有/dev/urandom和/dev/random这两种不同的文件，后者在不能产生新的随机数时会阻塞程序，而前者不会（ublock），当然产生的随机数效果就不太好了，这对加密解密这样的应用来说就不是一种很好的选择。
@@ -436,7 +436,9 @@
 </font>
 
 <font color=green>
-
+    /*
+     * 此处根据配置，进行创建相应的sri
+     */
     sentinelRedisInstance *createSentinelRedisInstance(char *name, int flags, char *hostname, int port, int quorum, sentinelRedisInstance *master) {
         sentinelRedisInstance *ri;
         sentinelAddr *addr;
@@ -490,10 +492,10 @@
         ri->cc_conn_time = 0;
         ri->pc_conn_time = 0;
         ri->pc_last_activity = 0;
-        /* We set the last_ping_time to "now" even if we actually don't have yet
-        * a connection with the node, nor we sent a ping.
-        * This is useful to detect a timeout in case we'll not be able to connect
-        * with the node at all. */
+        /*
+         * 初始化的时候，即使我们没有发出一个请求或者没有发送一个PING，我们也要把
+         * last_ping_time设置为当前时间。当我们判断对端是否能够联通的情况下很有用
+         */
         ri->last_ping_time = mstime();
         ri->last_avail_time = mstime();
         ri->last_pong_time = mstime();
@@ -825,7 +827,7 @@
 
 <font color=green>
 
-	/* Process time events */
+    /* Process time events */
     static int processTimeEvents(aeEventLoop *eventLoop) {
         int processed = 0;
         aeTimeEvent *te;
@@ -988,7 +990,305 @@
 
 </font>
 
-##6 sentinel的定时处理任务
+##6 sentinel连接redis实例
+
+<font color = blue>
+
+>下面的代码块，总体说明连接一个redis实例的时候，会创建cmd和pub/sub两个链接，cmd连接创建成功时候立即发送一个ping命令，pub/sub连接创建成功的时候立即去监听hello channel。
+>通过cmd连接给redis发送命令，通过pub/sub连接得到redis实例上的其他sentinel实例。
+</font>
+
+###6.1 建立cmd连接
+
+<font color = green>
+
+    /*
+     * 连接某个host ip:port, 创建连接context；
+     * 创建异步连接context；
+     */
+    redisAsyncContext *redisAsyncConnectBind(const char *ip, int port,
+                                             const char *source_addr) {
+        redisContext *c = redisConnectBindNonBlock(ip,port,source_addr);
+        redisAsyncContext *ac = redisAsyncInitialize(c);
+        __redisAsyncCopyError(ac);
+        return ac;
+    }
+
+    /*
+     * 指定连接的名称，格式是：sentinel-<sentinel的runid的前8个字符>-<connection_type>
+     * connection_type是cmd or pubsub，然后把这个名称通过CLIENT SETNAME name发送给对端redis实例；
+     *
+     * 然后在redis instance端就可以通过CLIENT LIST列出所有的sentinel实例
+     */
+    void sentinelSetClientName(sentinelRedisInstance *ri, redisAsyncContext *c, char *type) {
+        char name[64];
+
+        snprintf(name,sizeof(name),"sentinel-%.8s-%s",server.runid,type);
+        if (redisAsyncCommand(c, sentinelDiscardReplyCallback, NULL,
+            "CLIENT SETNAME %s", name) == REDIS_OK)
+        {
+            ri->pending_commands++;
+        }
+    }
+
+    /*
+     * 向某个redis实例发送ping命令，并更新last_ping_time
+     * last_ping_time如果为0，则说明上一个ping命令的响应pong已经收到
+     * 出错就返回0，我们并不能想当然的认为PING命令还在对端的请求队列中
+     */
+    int sentinelSendPing(sentinelRedisInstance *ri) {
+        int retval = redisAsyncCommand(ri->cc,
+            sentinelPingReplyCallback, NULL, "PING");
+        if (retval == REDIS_OK) {
+            ri->pending_commands++;
+            /*
+             * 如果last_ping_time为0，说明上一个ping命令已经得到pong响应，可以更新之
+             */
+            if (ri->last_ping_time == 0) ri->last_ping_time = mstime();
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+    /*
+     * ping命令的回调函数
+     */
+    void sentinelPingReplyCallback(redisAsyncContext *c, void *reply, void *privdata) {
+        sentinelRedisInstance *ri = c->data;
+        redisReply *r;
+        REDIS_NOTUSED(privdata);
+
+        if (ri) ri->pending_commands--; // 得到响应，故而减记
+        if (!reply || !ri) return;
+        r = reply;
+
+        if (r->type == REDIS_REPLY_STATUS ||
+            r->type == REDIS_REPLY_ERROR) {
+            /* Update the "instance available" field only if this is an
+             * acceptable reply. */
+            if (strncmp(r->str,"PONG",4) == 0 ||
+                strncmp(r->str,"LOADING",7) == 0 ||
+                strncmp(r->str,"MASTERDOWN",10) == 0)
+            {
+                ri->last_avail_time = mstime();
+                ri->last_ping_time = 0; // pong flag，为0说明已经收到了pong响应
+            } else {
+                /*
+                 * 向redis实例发送SCRIPT KILL命令，因为redis实例已经卡住
+                 */
+                if (strncmp(r->str,"BUSY",4) == 0 &&
+                    (ri->flags & SRI_S_DOWN) &&
+                    !(ri->flags & SRI_SCRIPT_KILL_SENT))
+                {
+                    if (redisAsyncCommand(ri->cc,
+                            sentinelDiscardReplyCallback, NULL,
+                            "SCRIPT KILL") == REDIS_OK)
+                        ri->pending_commands++;
+                    ri->flags |= SRI_SCRIPT_KILL_SENT;
+                }
+            }
+        }
+        ri->last_pong_time = mstime();
+    }
+</font>
+
+###6.2 建立pub/sub连接，并处理连接上hello channel发来的消息
+
+<font color=green>
+
+    /*
+     * 处理Pub/Sub连接上发送来的hello message，如果message中的master名称无法识别，则不处理这条消息
+     */
+    void sentinelProcessHelloMessage(char *hello, int hello_len) {
+        /*
+         * hello message的Format，它由8个token组成:
+         * 0=ip,1=port,2=runid,3=current_epoch,4=master_name,
+         * 5=master_ip,6=master_port,7=master_config_epoch.
+         */
+        int numtokens, port, removed, master_port;
+        uint64_t current_epoch, master_config_epoch;
+        char **token = sdssplitlen(hello, hello_len, ",", 1, &numtokens);
+        sentinelRedisInstance *si, *master;
+
+        if (numtokens == 8) {
+            // 通过master name，获取sri
+            master = sentinelGetMasterByName(token[4]);
+            if (!master) goto cleanup; /* Unknown master, skip the message. */
+
+            // First, 通过其他sentinel的run id或者host:port，来获取sentinel信息
+            port = atoi(token[1]);
+            master_port = atoi(token[6]);
+            si = getSentinelRedisInstanceByAddrAndRunID(
+                            master->sentinels,token[0],port,token[2]);
+            current_epoch = strtoull(token[3],NULL,10);
+            master_config_epoch = strtoull(token[7],NULL,10);
+
+            if (!si) {
+                // 如果没找到，则要删除旧的，添加一个新的进去。旧的sentinel可能重启或者网络的拓扑发生的改变导致其失效了
+                removed = removeMatchingSentinelsFromMaster(master,token[0],port,
+                                token[2]);
+                if (removed) {
+                    sentinelEvent(REDIS_NOTICE,"-dup-sentinel",master,
+                        "%@ #duplicate of %s:%d or %s",
+                        token[0],port,token[2]);
+                }
+
+                // 添加新的sentinel实例
+                si = createSentinelRedisInstance(NULL,SRI_SENTINEL,
+                                token[0],port,master->quorum,master);
+                if (si) {
+                    sentinelEvent(REDIS_NOTICE,"+sentinel",si,"%@");
+                    // 为sri赋runid，其他地方没有机会为它赋值了
+                    si->runid = sdsnew(token[2]);
+                    sentinelFlushConfig();
+                }
+            }
+
+            // 更新 current_epoch
+            if (current_epoch > sentinel.current_epoch) {
+                sentinel.current_epoch = current_epoch;
+                sentinelFlushConfig();
+                sentinelEvent(REDIS_WARNING,"+new-epoch",master,"%llu",
+                    (unsigned long long) sentinel.current_epoch);
+            }
+
+            // 更新 config_epoch
+            if (master->config_epoch < master_config_epoch) {
+                master->config_epoch = master_config_epoch;
+                if (master_port != master->addr->port ||
+                    strcmp(master->addr->ip, token[5]))
+                {
+                    sentinelAddr *old_addr;
+
+                    sentinelEvent(REDIS_WARNING,"+config-update-from",si,"%@");
+                    sentinelEvent(REDIS_WARNING,"+switch-master",
+                        master,"%s %s %d %s %d",
+                        master->name,
+                        master->addr->ip, master->addr->port,
+                        token[5], master_port);
+
+                    old_addr = dupSentinelAddr(master->addr);
+                    sentinelResetMasterAndChangeAddress(master, token[5], master_port);
+                    sentinelCallClientReconfScript(master,
+                        SENTINEL_OBSERVER,"start",
+                        old_addr,master->addr);
+                    releaseSentinelAddr(old_addr);
+                }
+            }
+
+            // 更新hello消息时间
+            if (si) si->last_hello_time = mstime();
+        }
+
+    cleanup:
+        sdsfreesplitres(token,numtokens);
+    }
+
+    /*
+     * 一个 Sentinel 可以与其他多个 Sentinel 进行连接， 各个 Sentinel 之间可以互相检查对方的可用性，
+     * 并进行信息交换。你无须为运行的每个 Sentinel 分别设置其他 Sentinel 的地址， 因为 Sentinel 可以
+     * 通过发布与订阅功能来自动发现正在监视相同主服务器的其他 Sentinel ， 这一功能是通过向频道
+     * __sentinel__:hello 发送信息来实现的。
+     *
+     * 即在一个master的hello channel上，可以发现这个master的其他sentinel
+     */
+    void sentinelReceiveHelloMessages(redisAsyncContext *c, void *reply, void *privdata) {
+        sentinelRedisInstance *ri = c->data;
+        redisReply *r;
+        REDIS_NOTUSED(privdata);
+
+        if (!reply || !ri) return;
+        r = reply;
+
+        // 更新pc_last_activity
+        ri->pc_last_activity = mstime();
+
+        // 检查参数合法性
+        if (r->type != REDIS_REPLY_ARRAY ||
+            r->elements != 3 ||
+            r->element[0]->type != REDIS_REPLY_STRING ||
+            r->element[1]->type != REDIS_REPLY_STRING ||
+            r->element[2]->type != REDIS_REPLY_STRING ||
+            strcmp(r->element[0]->str,"message") != 0) return;
+
+        // 对于runid等于自身的message不处理
+        if (strstr(r->element[2]->str,server.runid) != NULL) return;
+        // 处理hello message
+        sentinelProcessHelloMessage(r->element[2]->str, r->element[2]->len);
+    }
+</font>
+
+###6.3 sentinel建立链接的函数
+
+<font color=green>
+
+    /*
+     * 向一个redis实例发出两个异步的连接，分别是cmd和pub/sub连接，任何一个不成功，
+     * sri的flag就会被置为SRI_DISCONNECTED
+     */
+    void sentinelReconnectInstance(sentinelRedisInstance *ri) {
+        if (!(ri->flags & SRI_DISCONNECTED)) return;
+
+        // 创建cmd连接，用于向redis server发送命令
+        if (ri->cc == NULL) {
+            ri->cc = redisAsyncConnectBind(ri->addr->ip,ri->addr->port,REDIS_BIND_ADDR);
+            if (ri->cc->err) {
+                sentinelEvent(REDIS_DEBUG,"-cmd-link-reconnection",ri,"%@ #%s",
+                    ri->cc->errstr);
+                sentinelKillLink(ri,ri->cc);
+            } else {
+                ri->cc_conn_time = mstime();
+                ri->cc->data = ri;
+                redisAeAttach(server.el,ri->cc);
+                redisAsyncSetConnectCallback(ri->cc,
+                                                sentinelLinkEstablishedCallback);
+                redisAsyncSetDisconnectCallback(ri->cc,
+                                                sentinelDisconnectCallback);
+                sentinelSendAuthIfNeeded(ri,ri->cc);
+                sentinelSetClientName(ri,ri->cc,"cmd");  // 为连接取名
+
+                // 重新连接成功，尽快发送PING命令
+                sentinelSendPing(ri);
+            }
+        }
+        // 创建Pub / Sub连接，用于和其他sentinel交流
+        if ((ri->flags & (SRI_MASTER|SRI_SLAVE)) && ri->pc == NULL) {
+            ri->pc = redisAsyncConnectBind(ri->addr->ip,ri->addr->port,REDIS_BIND_ADDR);
+            if (ri->pc->err) {
+                sentinelEvent(REDIS_DEBUG,"-pubsub-link-reconnection",ri,"%@ #%s",
+                    ri->pc->errstr);
+                sentinelKillLink(ri,ri->pc);
+            } else {
+                int retval;
+
+                ri->pc_conn_time = mstime();
+                ri->pc->data = ri;
+                redisAeAttach(server.el,ri->pc);
+                redisAsyncSetConnectCallback(ri->pc,
+                                                sentinelLinkEstablishedCallback);
+                redisAsyncSetDisconnectCallback(ri->pc,
+                                                sentinelDisconnectCallback);
+                sentinelSendAuthIfNeeded(ri,ri->pc);
+                sentinelSetClientName(ri,ri->pc,"pubsub");
+                // subscribe Sentinels "Hello" channel
+                retval = redisAsyncCommand(ri->pc,
+                    sentinelReceiveHelloMessages, NULL, "SUBSCRIBE %s",
+                        SENTINEL_HELLO_CHANNEL);
+                if (retval != REDIS_OK) {
+                    // subscribe不成功，Pub/Sub连接便没有存在的意义，先把连接关掉，尔后再重连
+                    sentinelKillLink(ri,ri->pc);
+                    return;
+                }
+            }
+        }
+        // 设置连接flag，如果跟redis实例的两个连接都成功，才能说明连接成功，
+        // 如果是与sentinel连接，一个cc连接成功就可以了
+        if (ri->cc && (ri->flags & SRI_SENTINEL || ri->pc))
+            ri->flags &= ~SRI_DISCONNECTED;
+    }
+</font>
+
+##7 sentinel的定时处理任务
 
 <font color=blue>
 
@@ -1015,7 +1315,7 @@
 
 </font>
 
-###6.1 tilt模式
+###7.1 tilt模式
 
 <font color=green>
 
@@ -1103,7 +1403,7 @@
 
 </font>
 
-###6.2 检查所有的redis instance的状态
+###7.2 检查所有的redis instance的状态
 
 <font color=green>
 
