@@ -1,3 +1,4 @@
+@@ -1,1840 +0,0 @@
 # redis sentinel 源码分析
 ---
 
@@ -1833,8 +1834,51 @@
 
 </font>
 
-##主要参考文档：
+## 主要参考文档：
     1 redis/src/sentinel.c
     2 http://blog.csdn.net/yfkiss/article/details/22151175
     3 http://blog.csdn.net/yfkiss/article/details/22687771
     4 http://redisdoc.com/topic/sentinel.html
+
+## sentinel log:
+                    _._
+               _.-``__ ''-._
+          _.-``    `.  `_.  ''-._           Redis 2.8.19 (00000000/0) 64 bit
+      .-`` .-```.  ```\/    _.,_ ''-._
+     (    '      ,       .-`  | `,    )     Running in sentinel mode
+     |`-._`-...-` __...-.``-._|'` _.-'|     Port: 26379
+     |    `-._   `._    /     _.-'    |     PID: 14114
+      `-._    `-._  `-./  _.-'    _.-'
+     |`-._`-._    `-.__.-'    _.-'_.-'|
+     |    `-._`-._        _.-'_.-'    |           http://redis.io
+      `-._    `-._`-.__.-'_.-'    _.-'
+     |`-._`-._    `-.__.-'    _.-'_.-'|
+     |    `-._`-._        _.-'_.-'    |
+      `-._    `-._`-.__.-'_.-'    _.-'
+          `-._    `-.__.-'    _.-'
+              `-._        _.-'
+                  `-.__.-'
+
+    [14114] 28 Jan 20:22:57.136 # Sentinel runid is 5e9ad1d7938e1b40028ac0b93eb41d0b422c7421
+    [14114] 28 Jan 20:22:57.136 # +monitor master mymaster 127.0.0.1 6379 quorum 2
+    [14114] 28 Jan 20:22:57.136 # +monitor master server3 10.42.140.47 6379 quorum 1
+    [14114] 28 Jan 20:22:57.136 # +monitor master server1 10.42.140.47 6379 quorum 1
+    [14114] 28 Jan 20:23:27.170 # +sdown master mymaster 127.0.0.1 6379
+    [14114] 28 Jan 20:23:27.170 # +sdown master server3 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.170 # +odown master server3 10.42.140.47 6379 #quorum 1/1
+    [14114] 28 Jan 20:23:27.170 # +new-epoch 2
+    [14114] 28 Jan 20:23:27.170 # +try-failover master server3 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.171 # +vote-for-leader 5e9ad1d7938e1b40028ac0b93eb41d0b422c7421 2
+    [14114] 28 Jan 20:23:27.171 # +elected-leader master server3 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.171 # +failover-state-select-slave master server3 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.171 # +sdown master server1 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.171 # +odown master server1 10.42.140.47 6379 #quorum 1/1
+    [14114] 28 Jan 20:23:27.171 # +new-epoch 3
+    [14114] 28 Jan 20:23:27.171 # +try-failover master server1 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.171 # +vote-for-leader 5e9ad1d7938e1b40028ac0b93eb41d0b422c7421 3
+    [14114] 28 Jan 20:23:27.171 # +elected-leader master server1 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.171 # +failover-state-select-slave master server1 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.229 # -failover-abort-no-good-slave master server3 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.229 # -failover-abort-no-good-slave master server1 10.42.140.47 6379
+    [14114] 28 Jan 20:23:27.295 # Next failover delay: I will not start a failover before Wed Jan 28 20:53:27 2015
+    [14114] 28 Jan 20:23:27.295 # Next failover delay: I will not start a failover before Wed Jan 28 20:53:27 2015
