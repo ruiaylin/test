@@ -190,7 +190,7 @@
         static int seed_initialized = 0;
         static unsigned char seed[20]; /* The SHA1 seed, from /dev/urandom. */
         static uint64_t counter = 0; /* The counter we hash with the seed. */
-        /*  生成一个随机种子数，存储到seed里面
+        //  生成一个随机种子数，存储到seed里面
         if (!seed_initialized) {
             FILE *fp = fopen("/dev/urandom", "r");
             if (fp && fread(seed, sizeof(seed), 1, fp) == 1)
@@ -297,253 +297,10 @@
 
 ##3 初始化配置
 
-<font color=green>
-
-    // 从文件读取所有的字符流
-    void loadServerConfig(char *filename, char *options) {
-        sds config = sdsempty();
-        char buf[REDIS_CONFIGLINE_MAX+1];
-
-        /* Load the file content */
-        if (filename) {
-            FILE *fp;
-
-            // 如果文件名称为空，则从stdin读取
-            if (filename[0] == '-' && filename[1] == '\0') {
-                fp = stdin;
-            } else {
-                if ((fp = fopen(filename,"r")) == NULL) {
-                    redisLog(REDIS_WARNING,
-                        "Fatal error, can't open config file '%s'", filename);
-                    exit(1);
-                }
-            }
-            while(fgets(buf,REDIS_CONFIGLINE_MAX+1,fp) != NULL)
-                config = sdscat(config,buf);
-            if (fp != stdin) fclose(fp);
-        }
-        /* Append the additional options */
-        if (options) {
-            config = sdscat(config,"\n");
-            config = sdscat(config,options);
-        }
-        loadServerConfigFromString(config);
-        sdsfree(config);
-    }
-    // 对字符流@config逐行拆分
-    void loadServerConfigFromString(char *config) {
-        char *err = NULL;
-        int linenum = 0, totlines, i;
-        int slaveof_linenum = 0;
-        sds *lines;
-
-        // 按照行进行分割，结果存在lines数组中，行数为totlines
-        lines = sdssplitlen(config,strlen(config),"\n",1,&totlines);
-
-        for (i = 0; i < totlines; i++) {
-            sds *argv;
-            int argc;
-
-            linenum = i+1; //记录行号，一旦出错，下面的loaderr就能说明出错所在的行号
-            // 去掉tab、换行、回车等空格键
-            lines[i] = sdstrim(lines[i]," \t\r\n");
-            // 不处理空行和注释行
-            if (lines[i][0] == '#' || lines[i][0] == '\0') continue;
-
-            // 把每行再进行分割，分割结果存进@argv数组，数组elem个数为args
-            argv = sdssplitargs(lines[i],&argc);
-            if (argv == NULL) { // 处理argv为空的情况
-                err = "Unbalanced quotes in configuration line";
-                goto loaderr;
-            }
-            if (argc == 0) { // 处理element number为0的情况
-                sdsfreesplitres(argv,argc);
-                continue;
-            }
-            sdstolower(argv[0]);  // 把line key转换为消息
-
-            /* Execute config directives */
-            if (!strcasecmp(argv[0],"sentinel")) {
-                /* argc == 1 is handled by main() as we need to enter the sentinel
-                 * mode ASAP. */
-                if (argc != 1) {
-                    if (!server.sentinel_mode) {
-                        err = "sentinel directive while not in sentinel mode";
-                        goto loaderr;
-                    }
-                    err = sentinelHandleConfiguration(argv+1,argc-1);
-                    if (err) goto loaderr;
-                }
-            } else {
-                err = "Bad directive or wrong number of arguments"; goto loaderr;
-            }
-            // 释放element数组
-            sdsfreesplitres(argv,argc);
-        }
-
-        // 释放line数组
-        sdsfreesplitres(lines,totlines);
-        return;
-
-    loaderr:
-        fprintf(stderr, "\n*** FATAL CONFIG FILE ERROR ***\n");
-        fprintf(stderr, "Reading the configuration file, at line %d\n", linenum);
-        fprintf(stderr, ">>> '%s'\n", lines[i]);
-        fprintf(stderr, "%s\n", err);
-        exit(1);
-    }
-
-    typedef struct sentinelAddr {
-        char *ip;
-        int port;
-    } sentinelAddr;
-    // 创建sentinel的地址
-    sentinelAddr *createSentinelAddr(char *hostname, int port) {
-        char ip[REDIS_IP_STR_LEN];
-        sentinelAddr *sa;
-
-        if (port <= 0 || port > 65535) {
-            errno = EINVAL;
-            return NULL;
-        }
-        if (anetResolve(NULL,hostname,ip,sizeof(ip)) == ANET_ERR) {
-            errno = ENOENT;
-            return NULL;
-        }
-        sa = zmalloc(sizeof(*sa));
-        sa->ip = sdsnew(ip);
-        sa->port = port;
-        return sa;
-    }
-
-</font>
-
-<font color=blue>
-
-    // 创建一个sri
-    /*
-     * 这个函数用于创建一个sentinel instance，用于代表一个sentinel的监控或者联系对象，
-     * 联系对象可以是一个redis master\redis slave\redis sentinel，下面两个参数在接到info命令时再赋值:
-     * runid: 初始化的时候被赋值为nil；
-     * info_refresh: 初始化的时候值为0，表示还没有接到过info命令；
-     *
-     * 如果flags值为SRI_MASTER，则sri被创建后，将被放在sentinel的sentinel.masters哈希表；
-     * 如果flags值为SRI_SLAVE or SRI_SENTINEL，则@name无用，它将用hostname:port作为自己的name,
-     *        同时@master一定不能为nil，创建的sri将被放入master->slaves or master->sentinels哈希表;
-     *
-     * 如果hostname不能被解析或者port溢出，则返回nil并且errno会被置为相关值；
-     * 如果master和某个slave的name一样，则返回nil且errno为EBUSY。因为相关的hash表以name作为hash key。
-     */
-</font>
+###3.1 读取配置文件
 
 <font color=green>
-    /*
-     * 此处根据配置，进行创建相应的sri
-     */
-    sentinelRedisInstance *createSentinelRedisInstance(char *name, int flags, char *hostname, int port, int quorum, sentinelRedisInstance *master) {
-        sentinelRedisInstance *ri;
-        sentinelAddr *addr;
-        dict *table = NULL;
-        char slavename[128], *sdsname;
 
-        redisAssert(flags & (SRI_MASTER | SRI_SLAVE | SRI_SENTINEL));
-        redisAssert((flags & SRI_MASTER) || master != NULL);
-
-        /* Check address validity. */
-        addr = createSentinelAddr(hostname, port);
-        if (addr == NULL) return NULL;
-
-        /* For slaves and sentinel we use ip:port as name. */
-        if (flags & (SRI_SLAVE | SRI_SENTINEL)) {
-            snprintf(slavename, sizeof(slavename),
-                strchr(hostname, ':') ? "[%s]:%d" : "%s:%d",
-                hostname, port);
-            name = slavename;
-        }
-
-        /* Make sure the entry is not duplicated. This may happen when the same
-        * name for a master is used multiple times inside the configuration or
-        * if we try to add multiple times a slave or sentinel with same ip/port
-        * to a master. */
-        // sentinel监控的所有的主都在sentinel{masters}里面，而每个master的slave
-        // 以及相关的sentinel则在sentinelRedisInstance{slaves, sentinels}里面
-        if (flags & SRI_MASTER) table = sentinel.masters;
-        else if (flags & SRI_SLAVE) table = master->slaves;
-        else if (flags & SRI_SENTINEL) table = master->sentinels;
-        sdsname = sdsnew(name);
-        if (dictFind(table, sdsname)) {
-            releaseSentinelAddr(addr);
-            sdsfree(sdsname);
-            errno = EBUSY;
-            return NULL;
-        }
-
-        /* Create the instance object. */
-        ri = zmalloc(sizeof(*ri));
-        /* Note that all the instances are started in the disconnected state,
-        * the event loop will take care of connecting them. */
-        ri->flags = flags | SRI_DISCONNECTED;
-        ri->name = sdsname;
-        ri->runid = NULL;
-        ri->config_epoch = 0;
-        ri->addr = addr;
-        ri->cc = NULL;
-        ri->pc = NULL;
-        ri->pending_commands = 0;
-        ri->cc_conn_time = 0;
-        ri->pc_conn_time = 0;
-        ri->pc_last_activity = 0;
-        /*
-         * 初始化的时候，即使我们没有发出一个请求或者没有发送一个PING，我们也要把
-         * last_ping_time设置为当前时间。当我们判断对端是否能够联通的情况下很有用
-         */
-        ri->last_ping_time = mstime();
-        ri->last_avail_time = mstime();
-        ri->last_pong_time = mstime();
-        ri->last_pub_time = mstime();
-        ri->last_hello_time = mstime();
-        ri->last_master_down_reply_time = mstime();
-        ri->s_down_since_time = 0;
-        ri->o_down_since_time = 0;
-        ri->down_after_period = master ? master->down_after_period :
-            SENTINEL_DEFAULT_DOWN_AFTER;
-        ri->master_link_down_time = 0;
-        ri->auth_pass = NULL;
-        ri->slave_priority = SENTINEL_DEFAULT_SLAVE_PRIORITY;
-        ri->slave_reconf_sent_time = 0;
-        ri->slave_master_host = NULL;
-        ri->slave_master_port = 0;
-        ri->slave_master_link_status = SENTINEL_MASTER_LINK_STATUS_DOWN;
-        ri->slave_repl_offset = 0;
-        ri->sentinels = dictCreate(&instancesDictType, NULL);
-        ri->quorum = quorum;
-        ri->parallel_syncs = SENTINEL_DEFAULT_PARALLEL_SYNCS;
-        ri->master = master;
-        ri->slaves = dictCreate(&instancesDictType, NULL);
-        ri->info_refresh = 0;
-
-        /* Failover state. */
-        ri->leader = NULL;
-        ri->leader_epoch = 0;
-        ri->failover_epoch = 0;
-        ri->failover_state = SENTINEL_FAILOVER_STATE_NONE;
-        ri->failover_state_change_time = 0;
-        ri->failover_start_time = 0;
-        ri->failover_timeout = SENTINEL_DEFAULT_FAILOVER_TIMEOUT;
-        ri->failover_delay_logged = 0;
-        ri->promoted_slave = NULL;
-        ri->notification_script = NULL;
-        ri->client_reconfig_script = NULL;
-
-        /* Role */
-        ri->role_reported = ri->flags & (SRI_MASTER | SRI_SLAVE);
-        ri->role_reported_time = mstime();
-        ri->slave_conf_change_time = mstime();
-
-        /* Add into the right table. */
-        dictAdd(table, ri->name, ri);
-        return ri;
-    }
     // 分析config的每一行，创建sri
     char *sentinelHandleConfiguration(char **argv, int argc) {
         sentinelRedisInstance *ri;
@@ -670,7 +427,270 @@
 
 </font>
 
+###3.2 从文件读取所有的字符流
+
+<font color=green>
+
+    void loadServerConfig(char *filename, char *options) {
+        sds config = sdsempty();
+        char buf[REDIS_CONFIGLINE_MAX+1];
+
+        /* Load the file content */
+        if (filename) {
+            FILE *fp;
+
+            // 如果文件名称为空，则从stdin读取
+            if (filename[0] == '-' && filename[1] == '\0') {
+                fp = stdin;
+            } else {
+                if ((fp = fopen(filename,"r")) == NULL) {
+                    redisLog(REDIS_WARNING,
+                        "Fatal error, can't open config file '%s'", filename);
+                    exit(1);
+                }
+            }
+            while(fgets(buf,REDIS_CONFIGLINE_MAX+1,fp) != NULL)
+                config = sdscat(config,buf);
+            if (fp != stdin) fclose(fp);
+        }
+        /* Append the additional options */
+        if (options) {
+            config = sdscat(config,"\n");
+            config = sdscat(config,options);
+        }
+        loadServerConfigFromString(config);
+        sdsfree(config);
+    }
+
+</font>
+
+###3.3 对字符流@config逐行拆分
+
+<font color=green>
+
+    void loadServerConfigFromString(char *config) {
+        char *err = NULL;
+        int linenum = 0, totlines, i;
+        int slaveof_linenum = 0;
+        sds *lines;
+
+        // 按照行进行分割，结果存在lines数组中，行数为totlines
+        lines = sdssplitlen(config,strlen(config),"\n",1,&totlines);
+
+        for (i = 0; i < totlines; i++) {
+            sds *argv;
+            int argc;
+
+            linenum = i+1; //记录行号，一旦出错，下面的loaderr就能说明出错所在的行号
+            // 去掉tab、换行、回车等空格键
+            lines[i] = sdstrim(lines[i]," \t\r\n");
+            // 不处理空行和注释行
+            if (lines[i][0] == '#' || lines[i][0] == '\0') continue;
+
+            // 把每行再进行分割，分割结果存进@argv数组，数组elem个数为args
+            argv = sdssplitargs(lines[i],&argc);
+            if (argv == NULL) { // 处理argv为空的情况
+                err = "Unbalanced quotes in configuration line";
+                goto loaderr;
+            }
+            if (argc == 0) { // 处理element number为0的情况
+                sdsfreesplitres(argv,argc);
+                continue;
+            }
+            sdstolower(argv[0]);  // 把line key转换为消息
+
+            /* Execute config directives */
+            if (!strcasecmp(argv[0],"sentinel")) {
+                /* argc == 1 is handled by main() as we need to enter the sentinel
+                 * mode ASAP. */
+                if (argc != 1) {
+                    if (!server.sentinel_mode) {
+                        err = "sentinel directive while not in sentinel mode";
+                        goto loaderr;
+                    }
+                    err = sentinelHandleConfiguration(argv+1,argc-1);
+                    if (err) goto loaderr;
+                }
+            } else {
+                err = "Bad directive or wrong number of arguments"; goto loaderr;
+            }
+            // 释放element数组
+            sdsfreesplitres(argv,argc);
+        }
+
+        // 释放line数组
+        sdsfreesplitres(lines,totlines);
+        return;
+
+    loaderr:
+        fprintf(stderr, "\n*** FATAL CONFIG FILE ERROR ***\n");
+        fprintf(stderr, "Reading the configuration file, at line %d\n", linenum);
+        fprintf(stderr, ">>> '%s'\n", lines[i]);
+        fprintf(stderr, "%s\n", err);
+        exit(1);
+    }
+
+    typedef struct sentinelAddr {
+        char *ip;
+        int port;
+    } sentinelAddr;
+    // 创建sentinel的地址
+    sentinelAddr *createSentinelAddr(char *hostname, int port) {
+        char ip[REDIS_IP_STR_LEN];
+        sentinelAddr *sa;
+
+        if (port <= 0 || port > 65535) {
+            errno = EINVAL;
+            return NULL;
+        }
+        if (anetResolve(NULL,hostname,ip,sizeof(ip)) == ANET_ERR) {
+            errno = ENOENT;
+            return NULL;
+        }
+        sa = zmalloc(sizeof(*sa));
+        sa->ip = sdsnew(ip);
+        sa->port = port;
+        return sa;
+    }
+
+</font>
+
+###3.4 创建sri
+
+<font color=blue>
+
+    // 创建一个sri
+    /*
+     * 这个函数用于创建一个sentinel instance，用于代表一个sentinel的监控或者联系对象，
+     * 联系对象可以是一个redis master\redis slave\redis sentinel，下面两个参数在接到info命令时再赋值:
+     * runid: 初始化的时候被赋值为nil；
+     * info_refresh: 初始化的时候值为0，表示还没有接到过info命令；
+     *
+     * 如果flags值为SRI_MASTER，则sri被创建后，将被放在sentinel的sentinel.masters哈希表；
+     * 如果flags值为SRI_SLAVE or SRI_SENTINEL，则@name无用，它将用hostname:port作为自己的name,
+     *        同时@master一定不能为nil，创建的sri将被放入master->slaves or master->sentinels哈希表;
+     *
+     * 如果hostname不能被解析或者port溢出，则返回nil并且errno会被置为相关值；
+     * 如果master和某个slave的name一样，则返回nil且errno为EBUSY。因为相关的hash表以name作为hash key。
+     */
+
+</font>
+
+<font color=green>
+
+    /*
+     * 此处根据配置，进行创建相应的sri
+     */
+    sentinelRedisInstance *createSentinelRedisInstance(char *name, int flags, char *hostname, int port, int quorum, sentinelRedisInstance *master) {
+        sentinelRedisInstance *ri;
+        sentinelAddr *addr;
+        dict *table = NULL;
+        char slavename[128], *sdsname;
+
+        redisAssert(flags & (SRI_MASTER | SRI_SLAVE | SRI_SENTINEL));
+        redisAssert((flags & SRI_MASTER) || master != NULL);
+
+        /* Check address validity. */
+        addr = createSentinelAddr(hostname, port);
+        if (addr == NULL) return NULL;
+
+        /* For slaves and sentinel we use ip:port as name. */
+        if (flags & (SRI_SLAVE | SRI_SENTINEL)) {
+            snprintf(slavename, sizeof(slavename),
+                strchr(hostname, ':') ? "[%s]:%d" : "%s:%d",
+                hostname, port);
+            name = slavename;
+        }
+
+        /* Make sure the entry is not duplicated. This may happen when the same
+        * name for a master is used multiple times inside the configuration or
+        * if we try to add multiple times a slave or sentinel with same ip/port
+        * to a master. */
+        // sentinel监控的所有的主都在sentinel{masters}里面，而每个master的slave
+        // 以及相关的sentinel则在sentinelRedisInstance{slaves, sentinels}里面
+        if (flags & SRI_MASTER) table = sentinel.masters;
+        else if (flags & SRI_SLAVE) table = master->slaves;
+        else if (flags & SRI_SENTINEL) table = master->sentinels;
+        sdsname = sdsnew(name);
+        if (dictFind(table, sdsname)) {
+            releaseSentinelAddr(addr);
+            sdsfree(sdsname);
+            errno = EBUSY;
+            return NULL;
+        }
+
+        /* Create the instance object. */
+        ri = zmalloc(sizeof(*ri));
+        /* Note that all the instances are started in the disconnected state,
+        * the event loop will take care of connecting them. */
+        ri->flags = flags | SRI_DISCONNECTED;
+        ri->name = sdsname;
+        ri->runid = NULL;
+        ri->config_epoch = 0;
+        ri->addr = addr;
+        ri->cc = NULL;
+        ri->pc = NULL;
+        ri->pending_commands = 0;
+        ri->cc_conn_time = 0;
+        ri->pc_conn_time = 0;
+        ri->pc_last_activity = 0;
+        /*
+         * 初始化的时候，即使我们没有发出一个请求或者没有发送一个PING，我们也要把
+         * last_ping_time设置为当前时间。当我们判断对端是否能够联通的情况下很有用
+         */
+        ri->last_ping_time = mstime();
+        ri->last_avail_time = mstime();
+        ri->last_pong_time = mstime();
+        ri->last_pub_time = mstime();
+        ri->last_hello_time = mstime();
+        ri->last_master_down_reply_time = mstime();
+        ri->s_down_since_time = 0;
+        ri->o_down_since_time = 0;
+        ri->down_after_period = master ? master->down_after_period :
+            SENTINEL_DEFAULT_DOWN_AFTER;
+        ri->master_link_down_time = 0;
+        ri->auth_pass = NULL;
+        ri->slave_priority = SENTINEL_DEFAULT_SLAVE_PRIORITY;
+        ri->slave_reconf_sent_time = 0;
+        ri->slave_master_host = NULL;
+        ri->slave_master_port = 0;
+        ri->slave_master_link_status = SENTINEL_MASTER_LINK_STATUS_DOWN;
+        ri->slave_repl_offset = 0;
+        ri->sentinels = dictCreate(&instancesDictType, NULL);
+        ri->quorum = quorum;
+        ri->parallel_syncs = SENTINEL_DEFAULT_PARALLEL_SYNCS;
+        ri->master = master;
+        ri->slaves = dictCreate(&instancesDictType, NULL);
+        ri->info_refresh = 0;
+
+        /* Failover state. */
+        ri->leader = NULL;
+        ri->leader_epoch = 0;
+        ri->failover_epoch = 0;
+        ri->failover_state = SENTINEL_FAILOVER_STATE_NONE;
+        ri->failover_state_change_time = 0;
+        ri->failover_start_time = 0;
+        ri->failover_timeout = SENTINEL_DEFAULT_FAILOVER_TIMEOUT;
+        ri->failover_delay_logged = 0;
+        ri->promoted_slave = NULL;
+        ri->notification_script = NULL;
+        ri->client_reconfig_script = NULL;
+
+        /* Role */
+        ri->role_reported = ri->flags & (SRI_MASTER | SRI_SLAVE);
+        ri->role_reported_time = mstime();
+        ri->slave_conf_change_time = mstime();
+
+        /* Add into the right table. */
+        dictAdd(table, ri->name, ri);
+        return ri;
+    }
+
+</font>
+
 ##4 启动server，启动定时函数serverCron
+
+###4.1 定时函数serverCron流程
 
 <font color=green>
 
@@ -744,11 +764,65 @@
         }
 
         server.cronloops++;
-        // hz默认值为10，但是sentinel的定时函数sentinelTimer会修改这个值，原因见流程分析6
+        // hz默认值为10，但是sentinel的定时函数sentinelTimer会修改这个值，原因见流程分析7,
         // 参考下面的processTimeEvents，此处返回1000/10 = 100ms会导致serverCron
-        // 被定时执行时间由初始的1ms被修改为100ms，即函数的定时处理时长为100ms
+        // 被定时执行时间由初始的1ms被修改为100ms，即函数的定时处理时长为100ms。
         return 1000/server.hz;
     }
+
+</font>
+
+<font color=red>
+    !!!!注意：上面initServer中初始注册定时器函数serverCron的时候，用的时间间隔是1ms后调用这个函数，但是后面再次调用时，时间间隔是函数的返回值：
+</font>
+
+<font color=green>
+
+    /* Process time events */
+    static int processTimeEvents(aeEventLoop *eventLoop) {
+        int processed = 0;
+        aeTimeEvent *te;
+        long long maxId;
+        time_t now = time(NULL);
+
+        te = eventLoop->timeEventHead;
+        maxId = eventLoop->timeEventNextId-1;
+        while(te) {
+            long now_sec, now_ms;
+            long long id;
+
+            if (te->id > maxId) {
+                te = te->next;
+                continue;
+            }
+            aeGetTime(&now_sec, &now_ms);
+            if (now_sec > te->when_sec ||
+                (now_sec == te->when_sec && now_ms >= te->when_ms))
+            {
+                int retval;
+
+                id = te->id;
+                retval = te->timeProc(eventLoop, id, te->clientData);
+                processed++;
+
+                if (retval != AE_NOMORE) {  // 根据retval，修改定时任务的重新执行时间@te->when_sec&@te->when_ms
+                    aeAddMillisecondsToNow(retval,&te->when_sec,&te->when_ms);
+                } else {  // 如果返回值是-1，则删除定时任务
+                    aeDeleteTimeEvent(eventLoop, id);
+                }
+                te = eventLoop->timeEventHead;
+            } else {
+                te = te->next;
+            }
+        }
+        return processed;
+    }
+
+</font>
+
+###4.2 sentinel模式启动流程
+
+<font color=green>
 
     // 创建event loop，监听各个端口，并启动定时函数serverCron执行定时任务，定时间隔是1ms
     void initServer(void) {
@@ -822,59 +896,12 @@
 
 </font>
 
-<font color=red>
-    !!!!注意：上面initServer中初始注册定时器函数serverCron的时候，用的时间间隔是1ms后调用这个函数，但是后面再次调用时，时间间隔是函数的返回值：
-</font>
-
-<font color=green>
-
-    /* Process time events */
-    static int processTimeEvents(aeEventLoop *eventLoop) {
-        int processed = 0;
-        aeTimeEvent *te;
-        long long maxId;
-        time_t now = time(NULL);
-
-        te = eventLoop->timeEventHead;
-        maxId = eventLoop->timeEventNextId-1;
-        while(te) {
-            long now_sec, now_ms;
-            long long id;
-
-            if (te->id > maxId) {
-                te = te->next;
-                continue;
-            }
-            aeGetTime(&now_sec, &now_ms);
-            if (now_sec > te->when_sec ||
-                (now_sec == te->when_sec && now_ms >= te->when_ms))
-            {
-                int retval;
-
-                id = te->id;
-                retval = te->timeProc(eventLoop, id, te->clientData);
-                processed++;
-
-                if (retval != AE_NOMORE) {  // 根据retval，修改定时任务的重新执行时间@te->when_sec&@te->when_ms
-                    aeAddMillisecondsToNow(retval,&te->when_sec,&te->when_ms);
-                } else {  // 如果返回值是-1，则删除定时任务
-                    aeDeleteTimeEvent(eventLoop, id);
-                }
-                te = eventLoop->timeEventHead;
-            } else {
-                te = te->next;
-            }
-        }
-        return processed;
-    }
-
-</font>
-
 ##5 检查监控条件
 
+###5.1 检查configfile是否存在以及是否可写
+
 <font color=green>
 
-    // 检查configfile是否存在以及是否可写
     void sentinelIsRunning(void) {
         redisLog(REDIS_WARNING,"Sentinel runid is %s", server.runid);
 
@@ -896,6 +923,12 @@
          * at startup. */
         sentinelGenerateInitialMonitorEvents();
     }
+
+</font>
+
+###5.2 记录相关事件的内容，可以记录在log内，也可以通过hello channel发送出去，也可以在执行notification功能的时候把内容作为参数发送出去
+
+<font color=green>
 
     /* 记录event log，执行pub/sub, 执行notification脚本
      *
@@ -971,10 +1004,18 @@
         }
     }
 
+</font>
+
+###5.3 为每个能够确认的master生成一个monitor事件
+
+<font color=green>
+
     /* This function is called only at startup and is used to generate a
      * +monitor event for every configured master. The same events are also
      * generated when a master to monitor is added at runtime via the
      * SENTINEL MONITOR command. */
+    // 这个函数只会被调用一次，用于为每个master生成一个+monitor事件。如果sentinel
+    // 在运行的时候收到SENTINEL MONITOR命令[用于动态添加一个master]，也会生成同样的事件
     void sentinelGenerateInitialMonitorEvents(void) {
         dictIterator *di;
         dictEntry *de;
@@ -991,12 +1032,22 @@
 
 </font>
 
-##6 sentinel连接redis实例
+##6 sentinel与redis实例之间的通信
 
 <font color = blue>
 
->下面的代码块，总体说明连接一个redis实例的时候，会创建cmd和pub/sub两个链接，cmd连接创建成功时候立即发送一个ping命令，pub/sub连接创建成功的时候立即去监听hello channel。
->通过cmd连接给redis发送命令，通过pub/sub连接得到redis实例上的其他sentinel实例。
+> 下面的代码块，总体说明连接一个redis实例的时候，会创建cmd和pub/sub两个链接，cmd连接创建成功时候立即发送一个ping命令，pub/sub连接创建成功的时候立即去监听hello channel。
+> 通过cmd连接给redis发送命令，通过pub/sub连接得到redis实例上的其他sentinel实例。
+>
+> sentinel与maste/slave的交互主要包括：
+> a.PING:sentinel向其发送PING以了解其状态（是否下线）
+> b.INFO:sentinel向其发送INFO以获取replication相关的信息
+> c.PUBLISH:sentinel向其监控的master/slave发布本身的信息及master相关的配置
+> d.SUBSCRIBE:sentinel通过订阅master/slave的”__sentinel__:hello“频道以获取其它正在监控相同服务的sentinel
+> sentinel与sentinel的交互主要包括：
+> a.PING:sentinel向slave发送PING以了解其状态（是否下线）
+> b.SENTINEL is-master-down-by-addr：和其他sentinel协商master状态，如果master odown，则投票选出leader做fail over
+>
 </font>
 
 ###6.1 建立cmd连接
