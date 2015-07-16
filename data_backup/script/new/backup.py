@@ -212,6 +212,12 @@ def printHelp():
     print '  example: ./backup.py'
     #mysql -h publicdb.bce-preinternal.baidu.com -P7010 -ubce_rdsqa_w -pvZ1UjN0flrAtkrcf bce_scs"
 
+def __clearKnownHosts():
+    known_hosts = os.path.expanduser('~')
+    known_hosts += "/.ssh/known_hosts" 
+    cmd = ("rm -rf %s" % known_hosts)
+    os.system(cmd)
+
 if __name__ == '__main__':
     cwd = os.path.dirname(os.path.realpath(__file__))
     log.init_log(cwd + '/log/backup.log')
@@ -227,6 +233,9 @@ if __name__ == '__main__':
     logging.debug("master process number:%s" % num)
     if online == 1 and int(num) <= 0:
         sys.exit(1)
+
+    # clear known_hosts
+    __clearKnownHosts()
 
     remote_user="root"
     remote_dir="/root/agent/data/redis_8080"
