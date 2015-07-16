@@ -12,3 +12,6 @@ pexpect
 backup cmd:
 1 modify configure file:conf.py
 2 python backup.py
+
+[crontab]
+1 */4 * * * source /home/work/.bash_profile && python /home/test/backup.py
