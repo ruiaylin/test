@@ -13,6 +13,7 @@ import paramiko
 import logging
 import log
 import socket
+import commands
 
 from conf import *
 from public import *
@@ -116,7 +117,7 @@ def Backup(host, user, passwd, peer_dir, local_dir):
     """ SshExcuteCmd """
     print('host:%s, passwd:%s' % (host, passwd))
     ssh = paramiko.SSHClient()
-    ssh.load_system_host_keys()
+    #ssh.load_system_host_keys()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     flag = ""
     psd = passwd[0]
@@ -131,6 +132,10 @@ def Backup(host, user, passwd, peer_dir, local_dir):
             ssh.connect(hostname=host, username=user, password=passwd[1])
         except paramiko.AuthenticationException:
             logging.critical("Auth Failed!")
+        except socket.error:
+            logging.critical("Server %s is unreachable!" % host)
+        except Exception as e:
+            logging.critical("connect host %s, exception: %s" % (host, e))
         else:
             flag = "ok"
     except socket.error:
@@ -185,7 +190,10 @@ def GetRedisMasters(_host, _port, _user, _password, _db):
     #sql="select cluster_id,floating_ip,password,hash_name,port from cache_instance where cache_instance_type=3 and status=4;"
     #sql="select cluster_id,floating_ip,password,hash_name,port from cache_instance where cache_instance_type=3 and cluster_id in (select id from cache_cluster where status=5);"
     #sql="select cache_instance.status,cache_instance.cluster_id,cache_instance.floating_ip,cache_instance.password,cache_instance.hash_name,cache_instance.port from cache_instance,cache_cluster where cache_instance_type=3 and cache_instance.cluster_id=cache_cluster.id and cache_cluster.status=5 and cache_instance.status=0;"
-    sql="select cache_instance.cluster_id,cache_instance.floating_ip,cache_instance.password,cache_instance.hash_name,cache_instance.port from cache_instance,cache_cluster where cache_instance_type=3 and cache_instance.cluster_id=cache_cluster.id and cache_cluster.status=5 and cache_instance.status=0;"
+    sql="select cache_instance.cluster_id,cache_instance.floating_ip,cache_instance.password," \
+	    "cache_instance.hash_name,cache_instance.port from cache_instance,cache_cluster " \
+		"where cache_instance_type=3 and cache_instance.cluster_id=cache_cluster.id " \
+		"and engine_type=2 and (cache_cluster.status=5 or cache_cluster.status=16);"
     result = cursor.execute(sql)
     redis_masters = []
     for row in cursor.fetchall():
@@ -211,8 +219,8 @@ if __name__ == '__main__':
 
     # offline
     if online == 0 and False == IsMaster():
-       print "error: not real csmaster master!"
-       sys.exit(1)
+        print "error: not real csmaster master!"
+        sys.exit(1)
 
     # online
     num = GetProcessNum('csmaster')
@@ -231,14 +239,35 @@ if __name__ == '__main__':
         remote_password.append(redis_master[2])
         remote_password.append("admin@123")
         hash_name=redis_master[3]
-        local_dir=("%s/%s/%s" % (local_backup_dir, cluster_id, hash_name))
-        cmd = ("mkdir -p %s && cd %s && rm -rf ./data_old && mv data data_old && mkdir data" % (local_dir, local_dir))
+        local_dir = ("%s/%s/%s" % (local_backup_dir, cluster_id, hash_name))
+        #cmd = ("mkdir -p %s && cd %s && rm -rf ./data_old && mv data data_old && mkdir data" % (local_dir, local_dir))
+        cmd = ("mkdir -p %s && cd %s && mkdir data_new" % (local_dir, local_dir))
         #print cmd
         os.system(cmd)
-        local_dir=("%s/data" % local_dir)
-        cmd = ("mkdir -p %s" % local_dir)
+        local_dir=("%s/data_new" % local_dir)
+        #cmd = ("mkdir -p %s" % local_dir)
         #print cmd
-        os.system(cmd)
+        #os.system(cmd)
         #print('peer{host:%s, user:%s, password:%s, dir:%s}' % (remote_host, remote_user, remote_password, remote_dir))
         Backup(remote_host, remote_user, remote_password, remote_dir, local_dir)
+        cmd = ("find %s/ -type f | wc -l" % local_dir)
+        file_num = commands.getoutput(cmd)
+        # the data_new is empty, delete it
+        if int(file_num) == 0:
+            cmd = ("cd %s && cd .. && rm -rf ./data_new" % local_dir)
+            os.system(cmd)
+            continue
 
+        data_dir = ("%s/../data" % local_dir)
+        cmd = ("find %s/../data -type f | wc -l" % local_dir)
+        file_num = 0
+        if os.path.isdir(data_dir):
+            file_num = commands.getoutput(cmd)
+        cmd = ("cd %s && cd .. && mv data_new data" % local_dir)
+        if int(file_num) != 0:
+            # the data dir is not empty, delete data_old and move data to data_old
+            if os.path.isdir(data_dir):
+                cmd = ("cd %s && cd .. && rm -rf ./data_old" \
+                        " && mv data data_old && mv data_new data" % local_dir)
+
+        os.system(cmd)

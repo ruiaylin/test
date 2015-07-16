@@ -1,4 +1,3 @@
-@@ -1,1840 +0,0 @@
 # redis sentinel 源码分析
 ---
 
@@ -690,7 +689,135 @@
 
 ##4 启动server，启动定时函数serverCron
 
-###4.1 定时函数serverCron流程
+###4.1 sentinel模式启动流程
+
+<font color=green>
+
+    // 创建event loop，监听各个端口，并启动定时函数serverCron执行定时任务，定时间隔是1ms
+    void initServer(void) {
+        int j;
+
+        // 信号处理
+        signal(SIGHUP, SIG_IGN);
+        signal(SIGPIPE, SIG_IGN);
+        setupSignalHandlers();
+
+        if (server.syslog_enabled) {
+            openlog(server.syslog_ident, LOG_PID | LOG_NDELAY | LOG_NOWAIT,
+                server.syslog_facility);
+        }
+
+        // 初始化主要成员
+        server.pid = getpid();
+        server.monitors = listCreate();
+
+        createSharedObjects();
+        adjustOpenFilesLimit();
+        // 创建event loop
+        server.el = aeCreateEventLoop(server.maxclients+REDIS_EVENTLOOP_FDSET_INCR);
+        // 创建root db
+        server.db = zmalloc(sizeof(redisDb)*server.dbnum);
+
+        // 监听端口
+        if (server.port != 0 &&
+            listenToPort(server.port,server.ipfd,&server.ipfd_count) == REDIS_ERR)
+            exit(1);
+
+        /* Abort if there are no listening sockets at all. */
+        if (server.ipfd_count == 0 && server.sofd < 0) {
+            redisLog(REDIS_WARNING, "Configured to not listen anywhere, exiting.");
+            exit(1);
+        }
+
+        /* Create the Redis databases, and initialize other internal state. */
+        // 创建db数组
+        for (j = 0; j < server.dbnum; j++) {
+            server.db[j].dict = dictCreate(&dbDictType,NULL);
+        }
+        server.pubsub_channels = dictCreate(&keylistDictType,NULL);
+        server.pubsub_patterns = listCreate();
+        server.dirty = 0;
+        resetServerStats();
+        /* A few stats we don't want to reset: server startup time, and peak mem. */
+        server.stat_starttime = time(NULL);
+        updateCachedTime();
+
+        /* Create the serverCron() time event, that's our main way to process
+         * background operations. */
+        // 启动定时器
+        if(aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
+            redisPanic("Can't create the serverCron time event.");
+            exit(1);
+        }
+
+        /* Create an event handler for accepting new connections in TCP and Unix
+         * domain sockets. */
+        for (j = 0; j < server.ipfd_count; j++) {
+            printf("initServer invoke acceptTcpHandler\n");
+            if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
+                acceptTcpHandler,NULL) == AE_ERR)
+                {
+                    redisPanic(
+                        "Unrecoverable error creating server.ipfd file event.");
+                }
+        }
+    }
+
+</font>
+
+<font color=red>
+    !!!!注意：上面initServer中注册定时器函数serverCron的时候，时间间隔参数是1ms，但是时间事件处理函数processTimeEvents会修改它的时间间隔，时间间隔是它的返回值：1000/server.hz[约为100ms]。
+</font>
+
+<font color=blue>
+> main函数初始化流程中被调用initServer，之后执行循环流程函数aeMain，这个函数会循环调用时间事件处理函数processTimeEvents。
+</font>
+
+<font color=green>
+
+    /* Process time events */
+    static int processTimeEvents(aeEventLoop *eventLoop) {
+        int processed = 0;
+        aeTimeEvent *te;
+        long long maxId;
+        time_t now = time(NULL);
+
+        te = eventLoop->timeEventHead;
+        maxId = eventLoop->timeEventNextId-1;
+        while(te) {
+            long now_sec, now_ms;
+            long long id;
+
+            if (te->id > maxId) {
+                te = te->next;
+                continue;
+            }
+            aeGetTime(&now_sec, &now_ms);
+            if (now_sec > te->when_sec ||
+                (now_sec == te->when_sec && now_ms >= te->when_ms))
+            {
+                int retval;
+
+                id = te->id;
+                retval = te->timeProc(eventLoop, id, te->clientData);
+                processed++;
+
+                if (retval != AE_NOMORE) {  // 根据retval，修改定时任务的重新执行时间@te->when_sec&@te->when_ms
+                    aeAddMillisecondsToNow(retval,&te->when_sec,&te->when_ms);
+                } else {  // 如果返回值是-1，则删除定时任务
+                    aeDeleteTimeEvent(eventLoop, id);
+                }
+                te = eventLoop->timeEventHead;
+            } else {
+                te = te->next;
+            }
+        }
+        return processed;
+    }
+
+</font>
+
+###4.2 定时函数serverCron流程
 
 <font color=green>
 
@@ -768,130 +895,6 @@
         // 参考下面的processTimeEvents，此处返回1000/10 = 100ms会导致serverCron
         // 被定时执行时间由初始的1ms被修改为100ms，即函数的定时处理时长为100ms。
         return 1000/server.hz;
-    }
-
-</font>
-
-<font color=red>
-    !!!!注意：上面initServer中初始注册定时器函数serverCron的时候，用的时间间隔是1ms后调用这个函数，但是后面再次调用时，时间间隔是函数的返回值：
-</font>
-
-<font color=green>
-
-    /* Process time events */
-    static int processTimeEvents(aeEventLoop *eventLoop) {
-        int processed = 0;
-        aeTimeEvent *te;
-        long long maxId;
-        time_t now = time(NULL);
-
-        te = eventLoop->timeEventHead;
-        maxId = eventLoop->timeEventNextId-1;
-        while(te) {
-            long now_sec, now_ms;
-            long long id;
-
-            if (te->id > maxId) {
-                te = te->next;
-                continue;
-            }
-            aeGetTime(&now_sec, &now_ms);
-            if (now_sec > te->when_sec ||
-                (now_sec == te->when_sec && now_ms >= te->when_ms))
-            {
-                int retval;
-
-                id = te->id;
-                retval = te->timeProc(eventLoop, id, te->clientData);
-                processed++;
-
-                if (retval != AE_NOMORE) {  // 根据retval，修改定时任务的重新执行时间@te->when_sec&@te->when_ms
-                    aeAddMillisecondsToNow(retval,&te->when_sec,&te->when_ms);
-                } else {  // 如果返回值是-1，则删除定时任务
-                    aeDeleteTimeEvent(eventLoop, id);
-                }
-                te = eventLoop->timeEventHead;
-            } else {
-                te = te->next;
-            }
-        }
-        return processed;
-    }
-
-</font>
-
-###4.2 sentinel模式启动流程
-
-<font color=green>
-
-    // 创建event loop，监听各个端口，并启动定时函数serverCron执行定时任务，定时间隔是1ms
-    void initServer(void) {
-        int j;
-
-        // 信号处理
-        signal(SIGHUP, SIG_IGN);
-        signal(SIGPIPE, SIG_IGN);
-        setupSignalHandlers();
-
-        if (server.syslog_enabled) {
-            openlog(server.syslog_ident, LOG_PID | LOG_NDELAY | LOG_NOWAIT,
-                server.syslog_facility);
-        }
-
-        // 初始化主要成员
-        server.pid = getpid();
-        server.monitors = listCreate();
-
-        createSharedObjects();
-        adjustOpenFilesLimit();
-        // 创建event loop
-        server.el = aeCreateEventLoop(server.maxclients+REDIS_EVENTLOOP_FDSET_INCR);
-        // 创建root db
-        server.db = zmalloc(sizeof(redisDb)*server.dbnum);
-
-        // 监听端口
-        if (server.port != 0 &&
-            listenToPort(server.port,server.ipfd,&server.ipfd_count) == REDIS_ERR)
-            exit(1);
-
-        /* Abort if there are no listening sockets at all. */
-        if (server.ipfd_count == 0 && server.sofd < 0) {
-            redisLog(REDIS_WARNING, "Configured to not listen anywhere, exiting.");
-            exit(1);
-        }
-
-        /* Create the Redis databases, and initialize other internal state. */
-        // 创建db数组
-        for (j = 0; j < server.dbnum; j++) {
-            server.db[j].dict = dictCreate(&dbDictType,NULL);
-        }
-        server.pubsub_channels = dictCreate(&keylistDictType,NULL);
-        server.pubsub_patterns = listCreate();
-        server.dirty = 0;
-        resetServerStats();
-        /* A few stats we don't want to reset: server startup time, and peak mem. */
-        server.stat_starttime = time(NULL);
-        updateCachedTime();
-
-        /* Create the serverCron() time event, that's our main way to process
-         * background operations. */
-        // 启动定时器
-        if(aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
-            redisPanic("Can't create the serverCron time event.");
-            exit(1);
-        }
-
-        /* Create an event handler for accepting new connections in TCP and Unix
-         * domain sockets. */
-        for (j = 0; j < server.ipfd_count; j++) {
-            printf("initServer invoke acceptTcpHandler\n");
-            if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
-                acceptTcpHandler,NULL) == AE_ERR)
-                {
-                    redisPanic(
-                        "Unrecoverable error creating server.ipfd file event.");
-                }
-        }
     }
 
 </font>
@@ -1933,3 +1936,4 @@
     [14114] 28 Jan 20:23:27.229 # -failover-abort-no-good-slave master server1 10.42.140.47 6379
     [14114] 28 Jan 20:23:27.295 # Next failover delay: I will not start a failover before Wed Jan 28 20:53:27 2015
     [14114] 28 Jan 20:23:27.295 # Next failover delay: I will not start a failover before Wed Jan 28 20:53:27 2015
+
