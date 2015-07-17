@@ -108,7 +108,14 @@
 ##1 main
 
 <font color=blue>
- sentinel启动流程
+
+> sentinel启动流程:
+>> 1 加载配置；
+>
+>> 2 初始化redis master、slave以及sentinel的sri；
+>
+>> 3 注册事件事件serverCron，定时地调用sentinel的逻辑loop函数sentinelTimer。
+
 </font>
 
 <font color=green>
@@ -1353,10 +1360,15 @@
 <font color=green>
 
     void sentinelTimer(void) {
+        // 检测是否进入tilt模式
         sentinelCheckTiltCondition();
+        // 最重要步骤:执行定期任务，如向master发送ping等命令、检查master状态、与其他sentinel交流
         sentinelHandleDictOfRedisInstances(sentinel.masters);
+        // 执行脚本任务
         sentinelRunPendingScripts();
+        // 清理执行完毕的script任务
         sentinelCollectTerminatedScripts();
+        // 杀死执行时间过长的scriptrenwu8
         sentinelKillTimedoutScripts();
 
         /* We continuously change the frequency of the Redis "timer interrupt"
@@ -1365,6 +1377,7 @@
          * exactly continue to stay synchronized asking to be voted at the
          * same time again and again (resulting in nobody likely winning the
          * election because of split brain voting). */
+        // 修改定时任务执行周期，以防止发生gossip协议的一个缺陷————“共振现象”:所有的sentinel都同时发起投票选举leader导致大家得到的选票都是1
         server.hz = REDIS_DEFAULT_HZ + rand() % REDIS_DEFAULT_HZ;
     }
 
@@ -1458,7 +1471,45 @@
 
 </font>
 
-###7.2 检查所有的redis instance的状态
+###7.2 sentinel定时任务最重要的任务：检查所有的redis instance的状态
+
+<font color=green>
+
+    /* Perform scheduled operations for all the instances in the dictionary.
+    * Recursively call the function against dictionaries of slaves. */
+    // 遍历sentinel.master，检查所有的master以及其slave和sentinel的状态
+    void sentinelHandleDictOfRedisInstances(dict *instances) {
+        dictIterator *di;
+        dictEntry *de;
+        sentinelRedisInstance *switch_to_promoted = NULL;
+
+        /* There are a number of things we need to perform against every master. */
+        di = dictGetIterator(instances);
+        while ((de = dictNext(di)) != NULL) {
+            sentinelRedisInstance *ri = dictGetVal(de);
+            
+            // 检查sri的状态，执行相关的周期性任务
+            sentinelHandleRedisInstance(ri);
+            if (ri->flags & SRI_MASTER) {
+                // 如果sri是master，还要检查其slave和sentinel的状态
+                sentinelHandleDictOfRedisInstances(ri->slaves);
+                sentinelHandleDictOfRedisInstances(ri->sentinels);
+                // 如果master sri的state为SENTINEL_FAILOVER_STATE_UPDATE_CONFIG，标明要switch的sri
+                if (ri->failover_state == SENTINEL_FAILOVER_STATE_UPDATE_CONFIG) {
+                    switch_to_promoted = ri;
+                }
+            }
+        }
+        // 执行failover任务
+        if (switch_to_promoted)
+            sentinelFailoverSwitchToPromotedSlave(switch_to_promoted);
+        dictReleaseIterator(di);
+    }
+
+</font>
+
+
+####7.2.1 周期性任务之一：发送info命令，分析sri的状态
 
 <font color=green>
 
@@ -1860,32 +1911,6 @@
         }
     }
 
-    /* Perform scheduled operations for all the instances in the dictionary.
-    * Recursively call the function against dictionaries of slaves. */
-    void sentinelHandleDictOfRedisInstances(dict *instances) {
-        dictIterator *di;
-        dictEntry *de;
-        sentinelRedisInstance *switch_to_promoted = NULL;
-
-        /* There are a number of things we need to perform against every master. */
-        di = dictGetIterator(instances);
-        while ((de = dictNext(di)) != NULL) {
-            sentinelRedisInstance *ri = dictGetVal(de);
-
-            sentinelHandleRedisInstance(ri);
-            if (ri->flags & SRI_MASTER) {
-                sentinelHandleDictOfRedisInstances(ri->slaves);
-                sentinelHandleDictOfRedisInstances(ri->sentinels);
-                if (ri->failover_state == SENTINEL_FAILOVER_STATE_UPDATE_CONFIG) {
-                    switch_to_promoted = ri;
-                }
-            }
-        }
-        if (switch_to_promoted)
-            sentinelFailoverSwitchToPromotedSlave(switch_to_promoted);
-        dictReleaseIterator(di);
-    }
-
 </font>
 
 ## 主要参考文档：
@@ -1936,4 +1961,3 @@
     [14114] 28 Jan 20:23:27.229 # -failover-abort-no-good-slave master server1 10.42.140.47 6379
     [14114] 28 Jan 20:23:27.295 # Next failover delay: I will not start a failover before Wed Jan 28 20:53:27 2015
     [14114] 28 Jan 20:23:27.295 # Next failover delay: I will not start a failover before Wed Jan 28 20:53:27 2015
-
