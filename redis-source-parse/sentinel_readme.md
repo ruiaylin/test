@@ -2686,6 +2686,53 @@ Sentinel 使用以下规则来选择新的主服务器：
         }
     }
 
+	/* Process the INFO output from masters. */
+	void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
+	    /* Handle slave -> master role switch. */
+	    if ((ri->flags & SRI_SLAVE) && role == SRI_MASTER) {
+	        /* If this is a promoted slave we can change state to the
+	         * failover state machine. */
+	        if ((ri->flags & SRI_PROMOTED) &&
+	            (ri->master->flags & SRI_FAILOVER_IN_PROGRESS) &&
+	            (ri->master->failover_state ==
+	                SENTINEL_FAILOVER_STATE_WAIT_PROMOTION))
+	        {
+	            /* Now that we are sure the slave was reconfigured as a master
+	             * set the master configuration epoch to the epoch we won the
+	             * election to perform this failover. This will force the other
+	             * Sentinels to update their config (assuming there is not
+	             * a newer one already available). */
+	            ri->master->config_epoch = ri->master->failover_epoch;
+	            ri->master->failover_state = SENTINEL_FAILOVER_STATE_RECONF_SLAVES;
+	            ri->master->failover_state_change_time = mstime();
+	            sentinelFlushConfig();
+	            sentinelEvent(REDIS_WARNING,"+promoted-slave",ri,"%@");
+	            sentinelEvent(REDIS_WARNING,"+failover-state-reconf-slaves",
+	                ri->master,"%@");
+	            sentinelCallClientReconfScript(ri->master,SENTINEL_LEADER,
+	                "start",ri->master->addr,ri->addr);
+	            sentinelForceHelloUpdateForMaster(ri->master);
+	        } else {
+	            /* A slave turned into a master. We want to force our view and
+	             * reconfigure as slave. Wait some time after the change before
+	             * going forward, to receive new configs if any. */
+	            mstime_t wait_time = SENTINEL_PUBLISH_PERIOD*4;
+	
+	            if (!(ri->flags & SRI_PROMOTED) &&
+	                 sentinelMasterLooksSane(ri->master) &&
+	                 sentinelRedisInstanceNoDownFor(ri,wait_time) &&
+	                 mstime() - ri->role_reported_time > wait_time)
+	            {
+	                int retval = sentinelSendSlaveOf(ri,
+	                        ri->master->addr->ip,
+	                        ri->master->addr->port);
+	                if (retval == REDIS_OK)
+	                    sentinelEvent(REDIS_NOTICE,"+convert-to-slave",ri,"%@");
+	            }
+	        }
+	    }
+	}	
+
 </font>
 
 #####7.2.6.5 告知其他所有的slave新的master的host&port
