@@ -2277,6 +2277,7 @@
              * includes a runid, otherwise the sender is not seeking for a vote. */
             // 如果请求参数中有runid，则选举sentinel leader
             if (ri && ri->flags & SRI_MASTER && strcasecmp(c->argv[5]->ptr,"*")) {
+				// 通过比较当前ri与@erq_epoch和@runid(argv[5])，判断出新的leader
                 leader = sentinelVoteLeader(ri,(uint64_t)req_epoch,
                                                 c->argv[5]->ptr,
                                                 &leader_epoch);
@@ -2286,9 +2287,9 @@
              * down state, leader, vote epoch. */
             // 给对端sentinel回复信息
             addReplyMultiBulkLen(c,3);
-            addReply(c, isdown ? shared.cone : shared.czero);
-            addReplyBulkCString(c, leader ? leader : "*");
-            addReplyLongLong(c, (long long)leader_epoch);
+            addReply(c, isdown ? shared.cone : shared.czero); // 如果确实down掉了，state值为1，否则为0
+            addReplyBulkCString(c, leader ? leader : "*");    // 如果有leader就返回leader的runid，否则返回*
+            addReplyLongLong(c, (long long)leader_epoch);     // 返回leader的epoch
             if (leader) sdsfree(leader);
         }
     }
@@ -2325,6 +2326,7 @@ Sentinel 自动故障迁移的一致性特质
      * If a vote is not available returns NULL, otherwise return the Sentinel
      * runid and populate the leader_epoch with the epoch of the vote. */
     char *sentinelVoteLeader(sentinelRedisInstance *master, uint64_t req_epoch, char *req_runid, uint64_t *leader_epoch) {
+		// 如果@req_epoch比当前sentinel的大，则更新sentinel的epoch
         if (req_epoch > sentinel.current_epoch) {
             sentinel.current_epoch = req_epoch;
             sentinelFlushConfig();
@@ -2334,6 +2336,7 @@ Sentinel 自动故障迁移的一致性特质
 
         if (master->leader_epoch < req_epoch && sentinel.current_epoch <= req_epoch)
         {
+			// @req_epoch比@master的epoch大，则更新master的leader为@req_runid
             sdsfree(master->leader);
             master->leader = sdsnew(req_runid);
             master->leader_epoch = sentinel.current_epoch;
@@ -2347,6 +2350,7 @@ Sentinel 自动故障迁移的一致性特质
                 master->failover_start_time = mstime()+rand()%SENTINEL_MAX_DESYNC;
         }
 
+		// 通过比较epoch，返回最新的leader sentinel
         *leader_epoch = master->leader_epoch;
         return master->leader ? sdsnew(master->leader) : NULL;
     }
