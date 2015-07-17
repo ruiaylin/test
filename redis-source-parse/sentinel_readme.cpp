@@ -1051,17 +1051,26 @@
 
 <font color = blue>
 
-> 下面的代码块，总体说明连接一个redis实例的时候，会创建cmd和pub/sub两个链接，cmd连接创建成功时候立即发送一个ping命令，pub/sub连接创建成功的时候立即去监听hello channel。
-> 通过cmd连接给redis发送命令，通过pub/sub连接得到redis实例上的其他sentinel实例。
+>
+>> 下面的代码块，总体说明连接一个redis实例的时候，会创建cmd和pub/sub两个链接，cmd连接创建成功时候立即发送一个ping命令，pub/sub连接创建成功的时候立即去监听hello channel。
+>
+>> 通过cmd连接给redis发送命令，通过pub/sub连接得到redis实例上的其他sentinel实例。
 >
 > sentinel与maste/slave的交互主要包括：
-> a.PING:sentinel向其发送PING以了解其状态（是否下线）
-> b.INFO:sentinel向其发送INFO以获取replication相关的信息
-> c.PUBLISH:sentinel向其监控的master/slave发布本身的信息及master相关的配置
-> d.SUBSCRIBE:sentinel通过订阅master/slave的”__sentinel__:hello“频道以获取其它正在监控相同服务的sentinel
+>
+>> a.PING:sentinel向其发送PING以了解其状态（是否下线）
+>
+>> b.INFO:sentinel向其发送INFO以获取replication相关的信息
+>
+>> c.PUBLISH:sentinel向其监控的master/slave发布本身的信息及master相关的配置
+>
+>> d.SUBSCRIBE:sentinel通过订阅master/slave的”__sentinel__:hello“频道以获取其它正在监控相同服务的sentinel
+>
 > sentinel与sentinel的交互主要包括：
-> a.PING:sentinel向slave发送PING以了解其状态（是否下线）
-> b.SENTINEL is-master-down-by-addr：和其他sentinel协商master状态，如果master odown，则投票选出leader做fail over
+>
+>> a.PING:sentinel向slave发送PING以了解其状态（是否下线）
+>
+>> b.SENTINEL is-master-down-by-addr：和其他sentinel协商master状态，如果master odown，则投票选出leader做fail over
 >
 </font>
 
@@ -2292,12 +2301,19 @@
 
 Sentinel 自动故障迁移的一致性特质
 
-Sentinel 自动故障迁移使用 Raft 算法来选举领头（leader） Sentinel ， 从而确保在一个给定的纪元（epoch）里， 只有一个领头产生。
-这表示在同一个纪元中， 不会有两个 Sentinel 同时被选中为领头， 并且各个 Sentinel 在同一个纪元中只会对一个领头进行投票。
-更高的配置纪元总是优于较低的纪元， 因此每个 Sentinel 都会主动使用更新的纪元来代替自己的配置。
-简单来说， 我们可以将 Sentinel 配置看作是一个带有版本号的状态。 一个状态会以最后写入者胜出（last-write-wins）的方式（也即是，最新的配置总是胜出）传播至所有其他 Sentinel 。
-举个例子， 当出现网络分割（network partitions）时， 一个 Sentinel 可能会包含了较旧的配置， 而当这个 Sentinel 接到其他 Sentinel 发来的版本更新的配置时， Sentinel 就会对自己的配置进行更新。
-如果要在网络分割出现的情况下仍然保持一致性， 那么应该使用 min-slaves-to-write 选项， 让主服务器在连接的从实例少于给定数量时停止执行写操作， 与此同时， 应该在每个运行 Redis 主服务器或从服务器的机器上运行 Redis Sentinel 进程。
+>
+>>Sentinel 自动故障迁移使用 Raft 算法来选举领头（leader） Sentinel ， 从而确保在一个给定的纪元（epoch）里， 只有一个领头产生。
+>
+>>这表示在同一个纪元中， 不会有两个 Sentinel 同时被选中为领头， 并且各个 Sentinel 在同一个纪元中只会对一个领头进行投票。
+>
+>>更高的配置纪元总是优于较低的纪元， 因此每个 Sentinel 都会主动使用更新的纪元来代替自己的配置。
+>
+>>简单来说， 我们可以将 Sentinel 配置看作是一个带有版本号的状态。 一个状态会以最后写入者胜出（last-write-wins）的方式（也即是，最新的配置总是胜出）传播至所有其他 Sentinel 。
+>
+>>举个例子， 当出现网络分割（network partitions）时， 一个 Sentinel 可能会包含了较旧的配置， 而当这个 Sentinel 接到其他 Sentinel 发来的版本更新的配置时， Sentinel 就会对自己的配置进行更新。
+>
+>>如果要在网络分割出现的情况下仍然保持一致性， 那么应该使用 min-slaves-to-write 选项， 让主服务器在连接的从实例少于给定数量时停止执行写操作， 与此同时， 应该在每个运行 Redis 主服务器或从服务器的机器上运行 Redis Sentinel 进程。
+>
 
 <font>
 
