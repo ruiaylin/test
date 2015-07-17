@@ -1604,7 +1604,7 @@
 
 </font>
 
-####7.2.1 周期性任务之一：发送info命令，分析sri的状态
+####7.2.1 周期性任务：发送info命令，分析sri的状态
 
 <font color=green>
 
@@ -2172,6 +2172,8 @@
 
 ####7.2.5 sentinel确认master的odown状态信息后，广播master的地址和状态给其他sentinel，让其他sentinel进行投票
 
+# 如果master->failover_state_change_time处于SENTINEL_FAILOVER_STATE_NONE时，才会要求进行投票，其标志是发出请求的@rundi不为'*'
+
 #####7.2.5.1 发出投票通知
 
 <font color=green>
@@ -2195,7 +2197,7 @@
             int retval;
 
             /* If the master state from other sentinel is too old, we clear it. */
-            // 如果其他sentinel标识的master的状态太旧，则不予以彩信
+            // 如果其他sentinel标识的master的状态太旧，则不予以采信
             if (elapsed > SENTINEL_ASK_PERIOD*5) {
                 ri->flags &= ~SRI_MASTER_DOWN;
                 sdsfree(ri->leader);
@@ -2210,7 +2212,7 @@
             // 只有满足下面三个条件时，才向其它sentinel发送通知：
             // 1 自己认为它已经odown，或者处于确认failover的过程中。
             // 2 sentinel处于可连接的状态。
-            // 3 在强迫发送广播的flag为false条件下，在SENTINEL_ASK_PERIOD周期内还没有收到回复
+            // 3 在强迫发送广播的flag为false条件下，上次发送ask命令有效期[SENTINEL_ASK_PERIOD]内还未收到回复
             if ((master->flags & SRI_S_DOWN) == 0) continue;
             if (ri->flags & SRI_DISCONNECTED) continue;
             if (!(flags & SENTINEL_ASK_FORCED) &&
@@ -2363,6 +2365,7 @@ Sentinel 自动故障迁移的一致性特质
 
     /* Receive the SENTINEL is-master-down-by-addr reply, see the
      * sentinelAskMasterStateToOtherSentinels() function for more information. */
+	// 返回的结果的格式是: state runid epoch，详细解释参加 ####7.2.5.2
     void sentinelReceiveIsMasterDownReply(redisAsyncContext *c, void *reply, void *privdata) {
         sentinelRedisInstance *ri = c->data;
         redisReply *r;
@@ -2388,8 +2391,8 @@ Sentinel 自动故障迁移的一致性特质
                 ri->flags &= ~SRI_MASTER_DOWN;
             }
 
-            // 如果对端sentinel返回了选举的结果，则更新leader
-            if (strcmp(r->element[1]->str,"*")) {
+            // 如果对端sentinel返回了选举的结果，则更新leader，形同“扩散”效应
+            if (strcmp(r->element[1]->str,"*")) { // 比较结果不为0，则str不为*
                 /* If the runid in the reply is not "*" the Sentinel actually
                  * replied with a vote. */
                 sdsfree(ri->leader);
@@ -2398,6 +2401,7 @@ Sentinel 自动故障迁移的一致性特质
                         "%s voted for %s %llu", ri->name,
                         r->element[1]->str,
                         (unsigned long long) r->element[2]->integer);
+				// 更新leader的runid和epoch
                 ri->leader = sdsnew(r->element[1]->str);
                 ri->leader_epoch = r->element[2]->integer;
             }
