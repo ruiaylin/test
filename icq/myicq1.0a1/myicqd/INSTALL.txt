@@ -1,0 +1,57 @@
+安装
+------------
+如果您是第一次安装myicqd，那么:
+
+myicqd用到了MySQL数据库，如果你还没有，请到
+http://www.mysql.com下载
+
+安装好MySQL以后:
+
+(为了简单，数据库名、用户名和密码都是myicq，在实际中可更改)
+
+1) 打开一个命令窗口，在MySQL中建立一个数据库，并添加一个用户:
+
+   C:\mysql\bin> mysql -uroot -p
+   ******** (输入root密码,如果还没有设置，直接输入回车即可)
+   mysql> GRANT ALL ON myicq.* TO myicq@localhost IDENTIFIED BY 'myicq';
+   mysql> CREATE DATABASE myicq;
+   mysql> quit
+
+2) 创建表格:
+
+   C:\mysql\bin> mysql -umyicq -Dmyicq -p < [myicqd目录]\myicq.sql
+   password: myicq
+   注意: [myicqd目录]代表myicqd所在的目录
+
+3) 编辑myicqd.cnf配置文件:
+
+   按照myicqd.cnf的注释，很容易配置好。大多数情况都用缺省值即可，只需把有关MySQL的
+   参数设好就行了。改好以后，把myicqd.cnf复制到c:\目录下
+
+4) 安装mysqld服务
+
+   这一步不是可选的。
+
+   安装很简单，执行
+
+   myicqd --install
+
+   就行了。如果以后想要卸载掉myicqd服务，也只需运行
+
+   myicqd --remove
+
+   如果安装成功的话，就可以用SCM启动或停止myicqd服务了，
+   或者运行:
+   net start myicq
+   net stop myicq
+
+5) 你可能想要添加一个系统用户，以发送系统广播消息:
+
+   C:\mysql\bin> mysql -umyicq -Dmyicq -p
+   password: myicq
+   mysql> INSERT INTO basic_tbl (uin, passwd) VALUES(10000, password('yourpassword'));
+   mysql> INSERT INTO ext_tbl (uin) VALUES(10000);
+
+   注意: yourpassword代表系统用户的密码
+
+   然后选择客户端程序的注册向导，取回10000这个号码。完成后，你会发现在主菜单中多了"广播消息"一项。此后，你可以选择个人设定来设定你的个人信息（比如，不允许任何人加我为好友)
