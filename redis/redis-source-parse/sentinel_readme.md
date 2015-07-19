@@ -2172,9 +2172,15 @@
 
 ####7.2.5 sentinel确认master的odown状态信息后，广播master的地址和状态给其他sentinel，让其他sentinel进行投票
 
-# 如果master->failover_state_change_time处于SENTINEL_FAILOVER_STATE_NONE时，才会要求进行投票，其标志是发出请求的@rundi不为'*'
+ 如果master->failover_state_change_time处于SENTINEL_FAILOVER_STATE_NONE时，才会要求进行投票，其标志是发出请求的@runid不为'*'
 
 #####7.2.5.1 发出投票通知
+
+<font color=blue>
+
+此处一个问题就是：发现一个master down掉的sentinel发出投票请求的时候，接收者依据epoch进行判断后并返回它认为的leader后，发现者对接收者的意见照单全收，并没有进行“反驳”。详细地，接收者接收所有的接收者的意见后，并没有进行一番比较。
+
+</font>
 
 <font color=green>
 
@@ -2336,9 +2342,11 @@ Sentinel 自动故障迁移的一致性特质
                 (unsigned long long) sentinel.current_epoch);
         }
 
+		// 从下面的第一个判断条件可以看出，如果自己的epoch和对端的相等，二者是不会进行比较的
         if (master->leader_epoch < req_epoch && sentinel.current_epoch <= req_epoch)
         {
 			// @req_epoch比@master的epoch大，则更新master的leader为@req_runid
+			// 这就是扩散效应，最终总能选举出一个leader
             sdsfree(master->leader);
             master->leader = sdsnew(req_runid);
             master->leader_epoch = sentinel.current_epoch;
