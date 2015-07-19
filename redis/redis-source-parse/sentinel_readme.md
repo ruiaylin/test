@@ -1517,6 +1517,8 @@ sentinelReconnectInstance会被sentinelHandleRedisInstance调用，进而会被s
             // 检查ri是否进入odown状态
             sentinelCheckObjectivelyDown(ri);
             // 判断是否需要开始执行failover动作
+			// 下面这个函数调用的sentinelStartFailover中，
+			// ri会增大自己的current_epoch，以使得自己当选为sentinel leader
             if (sentinelStartFailoverIfNeeded(ri))
                 // 与其他sentinel协商这个实例的状态，判断其是否应该进入odown状态
                 sentinelAskMasterStateToOtherSentinels(ri, SENTINEL_ASK_FORCED);
@@ -2139,7 +2141,7 @@ info命令查询slave的结果示例：
         master->failover_state = SENTINEL_FAILOVER_STATE_WAIT_START;
         master->flags |= SRI_FAILOVER_IN_PROGRESS;
         // 修改epoch
-        master->failover_epoch = ++sentinel.current_epoch;
+        master->failover_epoch = ++sentinel.current_epoch; // 此处增大自身的epoch，以增大当选为sentinel leader的可能性
         sentinelEvent(REDIS_WARNING,"+new-epoch",master,"%llu",
             (unsigned long long) sentinel.current_epoch);
         sentinelEvent(REDIS_WARNING,"+try-failover",master,"%@");
@@ -2159,6 +2161,8 @@ info命令查询slave的结果示例：
 <font color=red>
 
 !!!!此处一个问题就是：发现一个master down掉的sentinel发出投票请求的时候，接收者依据epoch进行判断后并返回它认为的leader后，发现者对接收者的意见照单全收，并没有进行“反驳”。换句话说，接收者接收所有的接收者的意见后，并没有进行一番比较，就接收了每个接收者的认为的leader，结果其leader就是最后一个接收者认为的leader。
+
+但是从另一方面说，每个接收者都会收到所有潜在的leader的选举邀请，他们会对所有这些候选者进行比较一番后，本地的leader肯定是最后比较的结果，这个结果会通过反馈给每个候选者的通知，使他们知道最终的胜出者，所以还是能选举出最后的leader。
 
 </font>
 
