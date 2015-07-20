@@ -109,12 +109,11 @@
 
 <font color=blue>
 
-> sentinel启动流程:
->> 1 加载配置；
->
->> 2 初始化redis master、slave以及sentinel的sri；
->
->> 3 注册事件事件serverCron，定时地调用sentinel的逻辑loop函数sentinelTimer。
+**sentinel启动流程:**
+
+- 1 加载配置；
+- 2 初始化redis master、slave以及sentinel的sri；
+- 3 注册事件事件serverCron，定时地调用sentinel的逻辑loop函数sentinelTimer。
 
 </font>
 
@@ -1055,23 +1054,19 @@
 >> 下面的代码块，总体说明连接一个redis实例的时候，会创建cmd和pub/sub两个链接，cmd连接创建成功时候立即发送一个ping命令，pub/sub连接创建成功的时候立即去监听hello channel。
 >
 >> 通过cmd连接给redis发送命令，通过pub/sub连接得到redis实例上的其他sentinel实例。
->
-> sentinel与maste/slave的交互主要包括：
->
->> a.PING:sentinel向其发送PING以了解其状态（是否下线）
->
->> b.INFO:sentinel向其发送INFO以获取replication相关的信息，通过这个命令可以获取master的slaves
->
->> c.PUBLISH:sentinel向其监控的master/slave发布本身的信息及master相关的配置
->
->> d.SUBSCRIBE:sentinel通过订阅master/slave的”__sentinel__:hello“频道以获取其它正在监控相同服务的sentinels
->
-> sentinel与sentinel的交互主要包括：
->
->> a.PING:sentinel向slave发送PING以了解其状态（是否下线）
->
->> b.SENTINEL is-master-down-by-addr：和其他sentinel协商master状态，如果master odown，则投票选出leader做fail over
->
+
+**sentinel与maste/slave**的交互主要包括：
+
+- a.PING:sentinel向其发送PING以了解其状态（是否下线）
+- b.INFO:sentinel向其发送INFO以获取replication相关的信息，通过这个命令可以获取master的slaves
+- c.PUBLISH:sentinel向其监控的master/slave发布本身的信息及master相关的配置
+- d.SUBSCRIBE:sentinel通过订阅master/slave的”__sentinel__:hello“频道以获取其它正在监控相同服务的sentinels
+
+**sentinel与sentinel**的交互主要包括：
+
+- a.PING:sentinel向slave发送PING以了解其状态（是否下线）
+- b.SENTINEL is-master-down-by-addr：和其他sentinel协商master状态，如果master odown，则投票选出leader做fail over
+
 </font>
 
 ###6.1 建立cmd连接
@@ -2443,6 +2438,12 @@ Sentinel 自动故障迁移的一致性特质
 
 #####7.2.6.1 开始failover动作
 
+<font color=blue>
+
+注意下面计票函数sentinelGetLeader的第二个参数ri->failover_epoch，其值与当前sentinel的epoch是相等的，它是在sentinelStartFailover函数中被赋值的。
+
+</font>
+
 <font color=green>
 
     /* ---------------- Failover state machine implementation ------------------- */
@@ -2458,7 +2459,7 @@ Sentinel 自动故障迁移的一致性特质
 
         /* If I'm not the leader, and it is not a forced failover via
          * SENTINEL FAILOVER, then I can't continue with the failover. */
-        // 如果自己不是leader，则等待failover超时，不执行任何动作
+        // 如果自己不是leader，则等待failover超时，退出
         if (!isleader && !(ri->flags & SRI_FORCE_FAILOVER)) {
             int election_timeout = SENTINEL_ELECTION_TIMEOUT;
 
@@ -2481,15 +2482,135 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
+######7.2.6.1.1 检查自己是否是sentinel leader
+
+<font color=blue>
+
+这一步对于是否进行failover非常重要，因为只有leader才有资格执行failover。
+
+</font>
+
+<font color=green>
+
+	struct sentinelLeader {
+	    char *runid;
+	    unsigned long votes;
+	};
+	
+	/* Helper function for sentinelGetLeader, increment the counter
+	 * relative to the specified runid. */
+	// 计算@runid的得票数，返回值就是其票数 
+	int sentinelLeaderIncr(dict *counters, char *runid) {
+	    dictEntry *de = dictFind(counters,runid);
+	    uint64_t oldval;
+	
+	    if (de) {
+	        oldval = dictGetUnsignedIntegerVal(de);
+	        dictSetUnsignedIntegerVal(de,oldval+1);
+	        return oldval+1;
+	    } else {
+	        de = dictAddRaw(counters,runid);
+	        redisAssert(de != NULL);
+	        dictSetUnsignedIntegerVal(de,1);
+	        return 1;
+	    }
+	}
+	
+	/* Scan all the Sentinels attached to this master to check if there
+	 * is a leader for the specified epoch.
+	 *
+	 * To be a leader for a given epoch, we should have the majority of
+	 * the Sentinels we know (ever seen since the last SENTINEL RESET) that
+	 * reported the same instance as leader for the same epoch. */
+	// 在指定epoch的前提下，根据所有sentinel的投票结果计算是否已经选出了一个leader。
+	// 投票已经结束，此时sentinel的候选者角色转换为记票员，其目的是查看自己是否是leader，
+	// 成为leader就必须得到多数人的同意，并且其票数必须超过(Num(sentinel)/2 + 1) 或者 master->quorum
+	char *sentinelGetLeader(sentinelRedisInstance *master, uint64_t epoch) {
+	    dict *counters;
+	    dictIterator *di;
+	    dictEntry *de;
+	    unsigned int voters = 0, voters_quorum;
+	    char *myvote;
+	    char *winner = NULL;
+	    uint64_t leader_epoch;
+	    uint64_t max_votes = 0;
+	
+		// master已经处于odown状态
+	    redisAssert(master->flags & (SRI_O_DOWN|SRI_FAILOVER_IN_PROGRESS));
+		// 创建投票计账薄
+	    counters = dictCreate(&leaderVotesDictType,NULL);
+	    // 选民个数
+	    voters = dictSize(master->sentinels)+1; /* All the other sentinels and me. */
+	
+	    /* Count other sentinels votes */
+	    // 投票统计【暂不把当前sentinel的投票结果包含在内】
+		di = dictGetIterator(master->sentinels);
+	    while((de = dictNext(di)) != NULL) {
+	        sentinelRedisInstance *ri = dictGetVal(de);
+	        if (ri->leader != NULL && ri->leader_epoch == sentinel.current_epoch)
+	            sentinelLeaderIncr(counters,ri->leader);
+	    }
+	    dictReleaseIterator(di);
+	
+	    /* Check what's the winner. For the winner to win, it needs two conditions:
+	     * 1) Absolute majority between voters (50% + 1).
+	     * 2) And anyway at least master->quorum votes. */
+	    // 计算出得票最多的候选者
+		di = dictGetIterator(counters);
+	    while((de = dictNext(di)) != NULL) {
+	        uint64_t votes = dictGetUnsignedIntegerVal(de);
+	
+	        if (votes > max_votes) {
+	            max_votes = votes;
+	            winner = dictGetKey(de);
+	        }
+	    }
+	    dictReleaseIterator(di);
+	
+	    /* Count this Sentinel vote:
+	     * if this Sentinel did not voted yet, either vote for the most
+	     * common voted sentinel, or for itself if no vote exists at all. */
+		// 计算当前sentinel的投票结果
+	    if (winner)
+	        myvote = sentinelVoteLeader(master,epoch,winner,&leader_epoch);
+	    else
+		    // 如果没有winner，就把它自己作为候选人
+	        myvote = sentinelVoteLeader(master,epoch,server.runid,&leader_epoch);
+	
+		// 把当前sentinel推举出来的leader与所有其他的sentinel推举出来的候选人进行一番比较
+	    if (myvote && leader_epoch == epoch) {
+		    // 计算当前sentinel推举出来的leader的票数
+	        uint64_t votes = sentinelLeaderIncr(counters,myvote);
+	
+			// 如果自己推举的候选人的票数多于其他sentinel推举出来的候选人的票数，就更新winner
+	        if (votes > max_votes) {
+	            max_votes = votes;
+	            winner = myvote;
+	        }
+	    }
+	
+		// 判别最终获胜者的票数是否合乎下面两个法则中的一个：
+		// 1 得票数超过一半(Num(sentinel)/2 + 1)；
+		// 2 得票数超过master自己定下的最少得票数
+	    voters_quorum = voters/2+1;
+	    if (winner && (max_votes < voters_quorum || max_votes < master->quorum))
+	        winner = NULL;
+	
+	    winner = winner ? sdsnew(winner) : NULL;
+	    sdsfree(myvote);       // 自己推举的候选人
+	    dictRelease(counters); // 记账薄
+	    return winner;         // 最终获胜者
+	}
+
+</font>
+
 #####7.2.6.2 从slave中选出一个master
 
-Sentinel 使用以下规则来选择新的主服务器：
+**Sentinel 使用以下规则来选择新的主服务器：**
 
->在失效主服务器属下的从服务器当中， 那些被标记为主观下线、已断线、或者最后一次回复 PING 命令的时间大于五秒钟的从服务器都会被淘汰。
->
->在失效主服务器属下的从服务器当中， 那些与失效主服务器连接断开的时长超过 down-after 选项指定的时长十倍的从服务器都会被淘汰。
->
->在经历了以上两轮淘汰之后剩下来的从服务器中， 我们选出复制偏移量（replication offset）最大的那个从服务器作为新的主服务器； 如果复制偏移量不可用， 或者从服务器的复制偏移量相同， 那么带有最小运行 ID 的那个从服务器成为新的主服务器。
+- 在失效主服务器属下的从服务器当中， 那些被标记为主观下线、已断线、或者最后一次回复 PING 命令的时间大于五秒钟的从服务器都会被淘汰。
+- 在失效主服务器属下的从服务器当中， 那些与失效主服务器连接断开的时长超过 down-after 选项指定的时长十倍的从服务器都会被淘汰。
+- 我们选出复制偏移量（replication offset）最大的那个从服务器作为新的主服务器； 如果复制偏移量不可用， 或者从服务器的复制偏移量相同， 那么带有最小运行 ID 的那个从服务器成为新的主服务器。
 
 <font color=green>
 
@@ -2882,8 +3003,9 @@ Sentinel 使用以下规则来选择新的主服务器：
 </font>
 
 ## 主要参考文档：
-    1 redis/src/sentinel.c
-    2 http://redisdoc.com/topic/sentinel.html
+
+- 1 redis/src/sentinel.c
+- 2 http://redisdoc.com/topic/sentinel.html
 
 ## sentinel log:
     [14114] 28 Jan 20:22:57.136 # Sentinel runid is 5e9ad1d7938e1b40028ac0b93eb41d0b422c7421
