@@ -1,7 +1,7 @@
-# redis sentinel 源码分析
+# redis sentinel 源码分析 #
 ---
 
-##0 主要数据结构
+##0 主要数据结构##
 
 <font color=blue>
  >此处首先是sentinel实例，其地位就相当于redis-server模式下的server对象。sentinel实例比较重要的成员就是masters，里面存储了所有的redis主从对的主sri，其key是主sri的name，value就是主sri。
@@ -105,7 +105,7 @@
 </font>
 
 
-##1 main
+##1 main##
 
 <font color=blue>
 
@@ -154,7 +154,9 @@
 
 </font>
 
-##2 检查程序是否进入sentinel模式以及sentinel模式下需要完成的初始化工作
+##2 检查程序是否进入sentinel模式以及sentinel模式下需要完成的初始化工作##
+
+###2.1 检查是否进入sentinel模式 ###
 
 <font color=green>
 
@@ -169,6 +171,8 @@
     }
 
 </font>
+
+###2.2 生成runid ###
 
 <font color=blue>
 
@@ -264,6 +268,13 @@
         // ./redis.h:95:#define REDIS_RUN_ID_SIZE 40
         getRandomHexChars(server.runid,REDIS_RUN_ID_SIZE);
     }
+
+</font>
+
+###2.3 初始化sentinel模式下sentinel对象的相关参数###
+
+<font color=green>
+
     // 初始化server.port
     void initSentinelConfig(void) {
         // #define REDIS_SENTINEL_PORT 26379
@@ -300,9 +311,9 @@
 
 </font>
 
-##3 初始化配置
+##3 初始化配置##
 
-###3.1 读取配置文件
+###3.1 读取配置文件###
 
 <font color=green>
 
@@ -432,7 +443,7 @@
 
 </font>
 
-###3.2 从文件读取所有的字符流
+###3.2 从文件读取所有的字符流###
 
 <font color=green>
 
@@ -469,7 +480,7 @@
 
 </font>
 
-###3.3 对字符流@config逐行拆分
+###3.3 对字符流@config逐行拆分###
 
 <font color=green>
 
@@ -560,7 +571,7 @@
 
 </font>
 
-###3.4 创建sri
+###3.4 创建sri###
 
 <font color=blue>
 
@@ -693,9 +704,9 @@
 
 </font>
 
-##4 启动server，启动定时函数serverCron
+##4 启动server，启动定时函数serverCron##
 
-###4.1 sentinel模式启动流程
+###4.1 sentinel模式启动流程###
 
 <font color=green>
 
@@ -825,7 +836,7 @@
 
 </font>
 
-###4.2 定时函数serverCron流程
+###4.2 定时函数serverCron流程###
 
 <font color=green>
 
@@ -910,9 +921,9 @@
 
 </font>
 
-##5 检查监控条件
+##5 检查监控条件##
 
-###5.1 检查configfile是否存在以及是否可写
+###5.1 检查configfile是否存在以及是否可写###
 
 <font color=green>
 
@@ -940,7 +951,13 @@
 
 </font>
 
-###5.2 记录相关事件的内容，可以记录在log内，也可以通过hello channel发送出去，也可以在执行notification功能的时候把内容作为参数发送出去
+###5.2 记录相关事件的内容###
+
+<font color=blue>
+
+相关内容可以记录在log内，也可以通过hello channel发送出去，也可以在执行notification功能的时候把内容作为参数发送出去
+
+</font>
 
 <font color=green>
 
@@ -1020,7 +1037,7 @@
 
 </font>
 
-###5.3 为每个能够确认的master生成一个monitor事件
+###5.3 为每个能够确认的master生成一个monitor事件###
 
 <font color=green>
 
@@ -1046,7 +1063,7 @@
 
 </font>
 
-##6 sentinel与redis实例之间的通信
+##6 sentinel与redis实例之间的通信##
 
 <font color = blue>
 
@@ -1069,7 +1086,7 @@
 
 </font>
 
-###6.1 建立cmd连接
+###6.1 建立cmd连接###
 
 <font color=blue>
 
@@ -1077,7 +1094,7 @@
 
 </font>
 
-###6.2 建立pub/sub连接，并处理连接上hello channel发来的消息
+###6.2 建立pub/sub连接，并处理连接上hello channel发来的消息###
 
 <font color=green>
 
@@ -1203,7 +1220,7 @@
     }
 </font>
 
-###6.3 sentinel建立链接的函数
+###6.3 sentinel建立链接的函数###
 
 <font color=blue>
 
@@ -1283,7 +1300,7 @@ sentinelReconnectInstance会被sentinelHandleRedisInstance调用，进而会被s
     }
 </font>
 
-##7 sentinel的定时处理任务
+##7 sentinel的定时处理任务##
 
 <font color=blue>
 
@@ -1316,7 +1333,7 @@ sentinelReconnectInstance会被sentinelHandleRedisInstance调用，进而会被s
 
 </font>
 
-###7.1 tilt模式
+###7.1 tilt模式###
 
 <font color=green>
 
@@ -1404,7 +1421,7 @@ sentinelReconnectInstance会被sentinelHandleRedisInstance调用，进而会被s
 
 </font>
 
-###7.2 sentinel定时任务最重要的任务：检查所有的redis instance的状态
+###7.2 sentinel定时任务最重要的任务：检查所有的redis instance的状态###
 
 <font color=red>
 
@@ -1525,7 +1542,7 @@ sentinelReconnectInstance会被sentinelHandleRedisInstance调用，进而会被s
 
 </font>
 
-####7.2.1 周期性任务：发送info命令，分析sri的状态
+####7.2.1 周期性任务：发送info命令，分析sri的状态####
 
 <font color=green>
 
@@ -1584,7 +1601,7 @@ sentinelReconnectInstance会被sentinelHandleRedisInstance调用，进而会被s
 
 </font>
 
-#####7.2.1.1 分析info命令的返回结果，添加sri的从或者sentinel、修改sri的状态、获取replication结果etc
+#####7.2.1.1 分析info命令的返回结果，添加sri的从或者sentinel、修改sri的状态、获取replication结果etc#####
 
 
 info命令查询sentinel的结果示例：
@@ -1816,7 +1833,7 @@ info命令查询slave的结果示例：
 
 </font>
 
-#####7.2.1.2 分析ping命令的返回结果
+#####7.2.1.2 分析ping命令的返回结果#####
 
 <font color = green>
 
@@ -1910,7 +1927,7 @@ info命令查询slave的结果示例：
     }
 
 </font>
-#####7.2.1.3 向master/slave上的其他sentinel发送hello消息
+#####7.2.1.3 向master/slave上的其他sentinel发送hello消息#####
 
 <font color=green>
 
@@ -1965,7 +1982,7 @@ info命令查询slave的结果示例：
 
 </font>
 
-####7.2.2 判断master是否进入sdown状态
+####7.2.2 判断master是否进入sdown状态####
 
 <font color=green>
     // 是否进入sdown的主要依据就是超过down_after_period没有收到的ping命令的响应
@@ -2031,7 +2048,7 @@ info命令查询slave的结果示例：
 
 </font>
 
-####7.2.3 判断master是否进入odown状态
+####7.2.3 判断master是否进入odown状态####
 
 <font color=green>
 
@@ -2083,7 +2100,7 @@ info命令查询slave的结果示例：
 
 </font>
 
-####7.2.4 判断master是否需要进行failover
+####7.2.4 判断master是否需要进行failover####
 
 <font color=green>
 
@@ -2147,11 +2164,11 @@ info命令查询slave的结果示例：
 
 </font>
 
-####7.2.5 sentinel确认master的odown状态信息后，广播master的地址和状态给其他sentinel，让其他sentinel进行投票
+####7.2.5 sentinel确认master的odown状态信息后，广播master的地址和状态给其他sentinel，让其他sentinel进行投票####
 
  如果master->failover_state_change_time处于SENTINEL_FAILOVER_STATE_NONE时，才会要求进行投票，其标志是发出请求的@runid不为'*'
 
-#####7.2.5.1 发出投票通知
+#####7.2.5.1 发出投票通知#####
 
 <font color=red>
 
@@ -2224,7 +2241,7 @@ info命令查询slave的结果示例：
 
 </font>
 
-#####7.2.5.2 处理其他sentinel发来的投票通知
+#####7.2.5.2 处理其他sentinel发来的投票通知#####
 
 <font color=red>
 
@@ -2283,7 +2300,7 @@ info命令查询slave的结果示例：
 
 </font>
 
-######7.2.5.2.1 投票选举leader
+######7.2.5.2.1 投票选举leader######
 
 <font color=blue>
 
@@ -2346,7 +2363,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-#####7.2.5.3 处理其他sentinel发回来的投票结果
+#####7.2.5.3 处理其他sentinel发回来的投票结果#####
 
 <font color=green>
 
@@ -2397,7 +2414,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-####7.2.6 执行failover动作
+####7.2.6 执行failover动作####
 
 <font color=green>
 
@@ -2436,7 +2453,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-#####7.2.6.1 开始failover动作
+#####7.2.6.1 开始failover动作#####
 
 <font color=blue>
 
@@ -2482,7 +2499,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-######7.2.6.1.1 检查自己是否是sentinel leader
+######7.2.6.1.1 检查自己是否是sentinel leader######
 
 <font color=blue>
 
@@ -2604,7 +2621,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-#####7.2.6.2 从slave中选出一个master
+#####7.2.6.2 从slave中选出一个master#####
 
 **Sentinel 使用以下规则来选择新的主服务器：**
 
@@ -2678,9 +2695,9 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-#####7.2.6.3 执行failover
+#####7.2.6.3 执行failover#####
 
-#####7.2.6.3.1 向选出来作为master的slave发送slaveof no one命令
+######7.2.6.3.1 向选出来作为master的slave发送slaveof no one命令######
 
 <font color=green>
 
@@ -2715,7 +2732,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-#####7.2.6.3.2 告知旧master以及其他slave新的master
+#####7.2.6.3.2 告知旧master以及其他slave新的master#####
 
 <font color=green>
 
@@ -2792,7 +2809,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-#####7.2.6.4 确认新master在failover timeout时间内是否完成了角色转换任务
+#####7.2.6.4 确认新master在failover timeout时间内是否完成了角色转换任务#####
 
 <font color=green>
 
@@ -2858,7 +2875,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-#####7.2.6.5 告知其他所有的slave新的master的host&port
+#####7.2.6.5 告知其他所有的slave新的master的host&port#####
 
 <font color=green>
 
@@ -2929,7 +2946,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-######7.2.6.5.1 检验是否所有的slave都已经获取到新的master
+######7.2.6.5.1 检验是否所有的slave都已经获取到新的master######
 
 <font color=green>
 
@@ -3002,7 +3019,7 @@ Sentinel 自动故障迁移的一致性特质
 
 </font>
 
-## 主要参考文档：
+## 主要参考文档：##
 
 - 1 redis/src/sentinel.c
 - 2 http://redisdoc.com/topic/sentinel.html

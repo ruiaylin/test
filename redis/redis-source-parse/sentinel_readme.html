@@ -441,6 +441,7 @@ img {
 
 <p></font></p>
 <h2>2 检查程序是否进入sentinel模式以及sentinel模式下需要完成的初始化工作</h2>
+<h3>2.1 检查是否进入sentinel模式</h3>
 <p><font color=green></p>
 <pre><code>// 创建一个server id
 int checkForSentinelMode(int argc, char **argv) {
@@ -454,6 +455,7 @@ int checkForSentinelMode(int argc, char **argv) {
 </code></pre>
 
 <p></font></p>
+<h3>2.2 生成runid</h3>
 <p><font color=blue></p>
 <blockquote>
 <p>Linux中的随机数可以从两个特殊的文件中产生，一个是/dev/urandom.另外一个是/dev/random。他们产生随机数的原理是利用当前系统的熵池来计算出固定一定数量的随机比特，然后将这些比特作为字节流返回。</p>
@@ -544,7 +546,12 @@ void initServerConfig(void) {
     // ./redis.h:95:#define REDIS_RUN_ID_SIZE 40
     getRandomHexChars(server.runid,REDIS_RUN_ID_SIZE);
 }
-// 初始化server.port
+</code></pre>
+
+<p></font></p>
+<h3>2.3 初始化sentinel模式下sentinel对象的相关参数</h3>
+<p><font color=green></p>
+<pre><code>// 初始化server.port
 void initSentinelConfig(void) {
     // #define REDIS_SENTINEL_PORT 26379
     server.port = REDIS_SENTINEL_PORT;
@@ -1199,7 +1206,10 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 </code></pre>
 
 <p></font></p>
-<h3>5.2 记录相关事件的内容，可以记录在log内，也可以通过hello channel发送出去，也可以在执行notification功能的时候把内容作为参数发送出去</h3>
+<h3>5.2 记录相关事件的内容</h3>
+<p><font color=blue></p>
+<p>相关内容可以记录在log内，也可以通过hello channel发送出去，也可以在执行notification功能的时候把内容作为参数发送出去</p>
+<p></font></p>
 <p><font color=green></p>
 <pre><code>/* 记录event log，执行pub/sub, 执行notification脚本
  *
@@ -2666,7 +2676,7 @@ void sentinelFailoverWaitStart(sentinelRedisInstance *ri) {
 
 /* Helper function for sentinelGetLeader, increment the counter
  * relative to the specified runid. */
-// 计算@runid的得票数，返回值就是其票数 
+// 计算@runid的得票数，返回值就是其票数
 int sentinelLeaderIncr(dict *counters, char *runid) {
     dictEntry *de = dictFind(counters,runid);
     uint64_t oldval;
@@ -2844,7 +2854,7 @@ sentinelRedisInstance *sentinelSelectSlave(sentinelRedisInstance *master) {
 
 <p></font></p>
 <h5>7.2.6.3 执行failover</h5>
-<h5>7.2.6.3.1 向选出来作为master的slave发送slaveof no one命令</h5>
+<h6>7.2.6.3.1 向选出来作为master的slave发送slaveof no one命令</h6>
 <p><font color=green></p>
 <pre><code>void sentinelFailoverSendSlaveOfNoOne(sentinelRedisInstance *ri) {
     int retval;
@@ -3012,7 +3022,7 @@ void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
             }
         }
     }
-}   
+}
 </code></pre>
 
 <p></font></p>
