@@ -1512,8 +1512,8 @@ sentinelReconnectInstance会被sentinelHandleRedisInstance调用，进而会被s
             // 检查ri是否进入odown状态
             sentinelCheckObjectivelyDown(ri);
             // 判断是否需要开始执行failover动作
-			// 下面这个函数调用的sentinelStartFailover中，
-			// ri会增大自己的current_epoch，以使得自己当选为sentinel leader
+            // 下面这个函数调用的sentinelStartFailover中，
+            // ri会增大自己的current_epoch，以使得自己当选为sentinel leader
             if (sentinelStartFailoverIfNeeded(ri))
                 // 与其他sentinel协商这个实例的状态，判断其是否应该进入odown状态
                 sentinelAskMasterStateToOtherSentinels(ri, SENTINEL_ASK_FORCED);
@@ -1588,58 +1588,58 @@ sentinelReconnectInstance会被sentinelHandleRedisInstance调用，进而会被s
 
 
 info命令查询sentinel的结果示例：
-	
+
 <font color=blue>
 
-	# Server
-	run_id:5bed921a1ecf7f7587bf818f3e00177e7cd11614
-	tcp_port:26380
-	hz:12
-	
-	# Sentinel
-	sentinel_masters:2
-	sentinel_tilt:0
-	sentinel_running_scripts:0
-	sentinel_scripts_queue_length:0
-	master0:name=server0,status=ok,address=127.0.0.1:6379,slaves=1,sentinels=2
-	master1:name=bae-meta1,status=ok,address=127.0.0.1:6000,slaves=1,sentinels=2
+    # Server
+    run_id:5bed921a1ecf7f7587bf818f3e00177e7cd11614
+    tcp_port:26380
+    hz:12
+
+    # Sentinel
+    sentinel_masters:2
+    sentinel_tilt:0
+    sentinel_running_scripts:0
+    sentinel_scripts_queue_length:0
+    master0:name=server0,status=ok,address=127.0.0.1:6379,slaves=1,sentinels=2
+    master1:name=bae-meta1,status=ok,address=127.0.0.1:6000,slaves=1,sentinels=2
 
 </font>
 
 info命令查询master的结果示例：
-	
+
 <font color=blue>
 
-	# Server
-	run_id:f099fe413ebca4d835d9a931f4557c262db896e5
-	tcp_port:6000
-	hz:10
-	
-	# Replication
-	role:master
-	connected_slaves:1
-	slave0:ip=127.0.0.1,port=6001,state=online,offset=115003206,lag=1
-	
+    # Server
+    run_id:f099fe413ebca4d835d9a931f4557c262db896e5
+    tcp_port:6000
+    hz:10
+
+    # Replication
+    role:master
+    connected_slaves:1
+    slave0:ip=127.0.0.1,port=6001,state=online,offset=115003206,lag=1
+
 </font>
 
 info命令查询slave的结果示例：
 
 <font color=blue>
 
-	# Server
-	run_id:ad2481c9ad65946ce18385998c2bdde314b1269c
-	tcp_port:6001
-	hz:10
+    # Server
+    run_id:ad2481c9ad65946ce18385998c2bdde314b1269c
+    tcp_port:6001
+    hz:10
 
-	# Replication
-	role:slave
-	master_host:127.0.0.1
-	master_port:6000
-	master_link_status:up
-	slave_repl_offset:115018650
-	slave_priority:100
-	connected_slaves:0
-	
+    # Replication
+    role:slave
+    master_host:127.0.0.1
+    master_port:6000
+    master_link_status:up
+    slave_repl_offset:115018650
+    slave_priority:100
+    connected_slaves:0
+
 </font>
 
 <font color=green>
@@ -1677,8 +1677,8 @@ info命令查询slave的结果示例：
             sds l = lines[j];
 
             /* run_id:<40 hex chars>*/
-			// 分析runid
-			// run_id:5bed921a1ecf7f7587bf818f3e00177e7cd11614
+            // 分析runid
+            // run_id:5bed921a1ecf7f7587bf818f3e00177e7cd11614
             if (sdslen(l) >= 47 && !memcmp(l,"run_id:",7)) {
                 if (ri->runid == NULL) {
                     ri->runid = sdsnewlen(l+7,40); // 如果现在的runid不存在，则拷贝info结果里面的
@@ -1694,8 +1694,8 @@ info命令查询slave的结果示例：
 
             /* old versions: slave0:<ip>,<port>,<state>
              * new versions: slave0:ip=127.0.0.1,port=9999,... */
-			// 分析slave
-			// slave0:ip=127.0.0.1,port=6001,state=online,offset=115003206,lag=1
+            // 分析slave
+            // slave0:ip=127.0.0.1,port=6001,state=online,offset=115003206,lag=1
             if ((ri->flags & SRI_MASTER) &&
                 sdslen(l) >= 7 &&
                 !memcmp(l,"slave",5) && isdigit(l[5]))
@@ -1734,7 +1734,7 @@ info命令查询slave的结果示例：
             }
 
             /* master_link_down_since_seconds:<seconds> */
-			// 分析 master_link_down_since_seconds
+            // 分析 master_link_down_since_seconds
             if (sdslen(l) >= 32 &&
                 !memcmp(l,"master_link_down_since_seconds",30))
             {
@@ -1742,15 +1742,15 @@ info命令查询slave的结果示例：
             }
 
             /* role:<role> */
-			// 分析replication部分的 role字段
-			// role:master
-			// role:slave
+            // 分析replication部分的 role字段
+            // role:master
+            // role:slave
             if (!memcmp(l,"role:master",11)) role = SRI_MASTER;
             else if (!memcmp(l,"role:slave",10)) role = SRI_SLAVE;
 
             if (role == SRI_SLAVE) {
                 /* master_host:<host> */
-				// master_host:127.0.0.1
+                // master_host:127.0.0.1
                 if (sdslen(l) >= 12 && !memcmp(l,"master_host:",12)) {
                     if (ri->slave_master_host == NULL ||
                         strcasecmp(l+12,ri->slave_master_host))
@@ -1762,7 +1762,7 @@ info命令查询slave的结果示例：
                 }
 
                 /* master_port:<port> */
-				// master_port:6000
+                // master_port:6000
                 if (sdslen(l) >= 12 && !memcmp(l,"master_port:",12)) {
                     int slave_master_port = atoi(l+12);
 
@@ -1773,7 +1773,7 @@ info命令查询slave的结果示例：
                 }
 
                 /* master_link_status:<status> */
-				// master_link_status:up
+                // master_link_status:up
                 if (sdslen(l) >= 19 && !memcmp(l,"master_link_status:",19)) {
                     ri->slave_master_link_status =
                         (strcasecmp(l+19,"up") == 0) ?
@@ -1782,12 +1782,12 @@ info命令查询slave的结果示例：
                 }
 
                 /* slave_priority:<priority> */
-				// slave_priority:100
+                // slave_priority:100
                 if (sdslen(l) >= 15 && !memcmp(l,"slave_priority:",15))
                     ri->slave_priority = atoi(l+15);
 
                 /* slave_repl_offset:<offset> */
-				// slave_repl_offset:115018650
+                // slave_repl_offset:115018650
                 if (sdslen(l) >= 18 && !memcmp(l,"slave_repl_offset:",18))
                     ri->slave_repl_offset = strtoull(l+18,NULL,10);
             }
@@ -2264,7 +2264,7 @@ info命令查询slave的结果示例：
              * includes a runid, otherwise the sender is not seeking for a vote. */
             // 如果请求参数中有runid，则选举sentinel leader
             if (ri && ri->flags & SRI_MASTER && strcasecmp(c->argv[5]->ptr,"*")) {
-				// 通过比较当前ri与@erq_epoch和@runid(argv[5])，判断出新的leader
+                // 通过比较当前ri与@erq_epoch和@runid(argv[5])，判断出新的leader
                 leader = sentinelVoteLeader(ri,(uint64_t)req_epoch,
                                                 c->argv[5]->ptr,
                                                 &leader_epoch);
@@ -2313,7 +2313,7 @@ Sentinel 自动故障迁移的一致性特质
      * If a vote is not available returns NULL, otherwise return the Sentinel
      * runid and populate the leader_epoch with the epoch of the vote. */
     char *sentinelVoteLeader(sentinelRedisInstance *master, uint64_t req_epoch, char *req_runid, uint64_t *leader_epoch) {
-		// 如果@req_epoch比当前sentinel的大，则更新sentinel的epoch
+        // 如果@req_epoch比当前sentinel的大，则更新sentinel的epoch
         if (req_epoch > sentinel.current_epoch) {
             sentinel.current_epoch = req_epoch;
             sentinelFlushConfig();
@@ -2321,11 +2321,11 @@ Sentinel 自动故障迁移的一致性特质
                 (unsigned long long) sentinel.current_epoch);
         }
 
-		// 从下面的第一个判断条件可以看出，如果自己的epoch和对端的相等，二者是不会进行比较的
+        // 从下面的第一个判断条件可以看出，如果自己的epoch和对端的相等，二者是不会进行比较的
         if (master->leader_epoch < req_epoch && sentinel.current_epoch <= req_epoch)
         {
-			// @req_epoch比@master的epoch大，则更新master的leader为@req_runid
-			// 这就是扩散效应，最终总能选举出一个leader
+            // @req_epoch比@master的epoch大，则更新master的leader为@req_runid
+            // 这就是扩散效应，最终总能选举出一个leader
             sdsfree(master->leader);
             master->leader = sdsnew(req_runid);
             master->leader_epoch = sentinel.current_epoch;
@@ -2339,7 +2339,7 @@ Sentinel 自动故障迁移的一致性特质
                 master->failover_start_time = mstime()+rand()%SENTINEL_MAX_DESYNC;
         }
 
-		// 通过比较epoch，返回最新的leader sentinel
+        // 通过比较epoch，返回最新的leader sentinel
         *leader_epoch = master->leader_epoch;
         return master->leader ? sdsnew(master->leader) : NULL;
     }
@@ -2352,7 +2352,7 @@ Sentinel 自动故障迁移的一致性特质
 
     /* Receive the SENTINEL is-master-down-by-addr reply, see the
      * sentinelAskMasterStateToOtherSentinels() function for more information. */
-	// 返回的结果的格式是: state runid epoch，详细解释参加 ####7.2.5.2
+    // 返回的结果的格式是: state runid epoch，详细解释参加 ####7.2.5.2
     void sentinelReceiveIsMasterDownReply(redisAsyncContext *c, void *reply, void *privdata) {
         sentinelRedisInstance *ri = c->data;
         redisReply *r;
@@ -2388,7 +2388,7 @@ Sentinel 自动故障迁移的一致性特质
                         "%s voted for %s %llu", ri->name,
                         r->element[1]->str,
                         (unsigned long long) r->element[2]->integer);
-				// 更新leader的runid和epoch
+                // 更新leader的runid和epoch
                 ri->leader = sdsnew(r->element[1]->str);
                 ri->leader_epoch = r->element[2]->integer;
             }
@@ -2492,115 +2492,115 @@ Sentinel 自动故障迁移的一致性特质
 
 <font color=green>
 
-	struct sentinelLeader {
-	    char *runid;
-	    unsigned long votes;
-	};
-	
-	/* Helper function for sentinelGetLeader, increment the counter
-	 * relative to the specified runid. */
-	// 计算@runid的得票数，返回值就是其票数 
-	int sentinelLeaderIncr(dict *counters, char *runid) {
-	    dictEntry *de = dictFind(counters,runid);
-	    uint64_t oldval;
-	
-	    if (de) {
-	        oldval = dictGetUnsignedIntegerVal(de);
-	        dictSetUnsignedIntegerVal(de,oldval+1);
-	        return oldval+1;
-	    } else {
-	        de = dictAddRaw(counters,runid);
-	        redisAssert(de != NULL);
-	        dictSetUnsignedIntegerVal(de,1);
-	        return 1;
-	    }
-	}
-	
-	/* Scan all the Sentinels attached to this master to check if there
-	 * is a leader for the specified epoch.
-	 *
-	 * To be a leader for a given epoch, we should have the majority of
-	 * the Sentinels we know (ever seen since the last SENTINEL RESET) that
-	 * reported the same instance as leader for the same epoch. */
-	// 在指定epoch的前提下，根据所有sentinel的投票结果计算是否已经选出了一个leader。
-	// 投票已经结束，此时sentinel的候选者角色转换为记票员，其目的是查看自己是否是leader，
-	// 成为leader就必须得到多数人的同意，并且其票数必须超过(Num(sentinel)/2 + 1) 或者 master->quorum
-	char *sentinelGetLeader(sentinelRedisInstance *master, uint64_t epoch) {
-	    dict *counters;
-	    dictIterator *di;
-	    dictEntry *de;
-	    unsigned int voters = 0, voters_quorum;
-	    char *myvote;
-	    char *winner = NULL;
-	    uint64_t leader_epoch;
-	    uint64_t max_votes = 0;
-	
-		// master已经处于odown状态
-	    redisAssert(master->flags & (SRI_O_DOWN|SRI_FAILOVER_IN_PROGRESS));
-		// 创建投票计账薄
-	    counters = dictCreate(&leaderVotesDictType,NULL);
-	    // 选民个数
-	    voters = dictSize(master->sentinels)+1; /* All the other sentinels and me. */
-	
-	    /* Count other sentinels votes */
-	    // 投票统计【暂不把当前sentinel的投票结果包含在内】
-		di = dictGetIterator(master->sentinels);
-	    while((de = dictNext(di)) != NULL) {
-	        sentinelRedisInstance *ri = dictGetVal(de);
-	        if (ri->leader != NULL && ri->leader_epoch == sentinel.current_epoch)
-	            sentinelLeaderIncr(counters,ri->leader);
-	    }
-	    dictReleaseIterator(di);
-	
-	    /* Check what's the winner. For the winner to win, it needs two conditions:
-	     * 1) Absolute majority between voters (50% + 1).
-	     * 2) And anyway at least master->quorum votes. */
-	    // 计算出得票最多的候选者
-		di = dictGetIterator(counters);
-	    while((de = dictNext(di)) != NULL) {
-	        uint64_t votes = dictGetUnsignedIntegerVal(de);
-	
-	        if (votes > max_votes) {
-	            max_votes = votes;
-	            winner = dictGetKey(de);
-	        }
-	    }
-	    dictReleaseIterator(di);
-	
-	    /* Count this Sentinel vote:
-	     * if this Sentinel did not voted yet, either vote for the most
-	     * common voted sentinel, or for itself if no vote exists at all. */
-		// 计算当前sentinel的投票结果
-	    if (winner)
-	        myvote = sentinelVoteLeader(master,epoch,winner,&leader_epoch);
-	    else
-		    // 如果没有winner，就把它自己作为候选人
-	        myvote = sentinelVoteLeader(master,epoch,server.runid,&leader_epoch);
-	
-		// 把当前sentinel推举出来的leader与所有其他的sentinel推举出来的候选人进行一番比较
-	    if (myvote && leader_epoch == epoch) {
-		    // 计算当前sentinel推举出来的leader的票数
-	        uint64_t votes = sentinelLeaderIncr(counters,myvote);
-	
-			// 如果自己推举的候选人的票数多于其他sentinel推举出来的候选人的票数，就更新winner
-	        if (votes > max_votes) {
-	            max_votes = votes;
-	            winner = myvote;
-	        }
-	    }
-	
-		// 判别最终获胜者的票数是否合乎下面两个法则中的一个：
-		// 1 得票数超过一半(Num(sentinel)/2 + 1)；
-		// 2 得票数超过master自己定下的最少得票数
-	    voters_quorum = voters/2+1;
-	    if (winner && (max_votes < voters_quorum || max_votes < master->quorum))
-	        winner = NULL;
-	
-	    winner = winner ? sdsnew(winner) : NULL;
-	    sdsfree(myvote);       // 自己推举的候选人
-	    dictRelease(counters); // 记账薄
-	    return winner;         // 最终获胜者
-	}
+    struct sentinelLeader {
+        char *runid;
+        unsigned long votes;
+    };
+
+    /* Helper function for sentinelGetLeader, increment the counter
+     * relative to the specified runid. */
+    // 计算@runid的得票数，返回值就是其票数
+    int sentinelLeaderIncr(dict *counters, char *runid) {
+        dictEntry *de = dictFind(counters,runid);
+        uint64_t oldval;
+
+        if (de) {
+            oldval = dictGetUnsignedIntegerVal(de);
+            dictSetUnsignedIntegerVal(de,oldval+1);
+            return oldval+1;
+        } else {
+            de = dictAddRaw(counters,runid);
+            redisAssert(de != NULL);
+            dictSetUnsignedIntegerVal(de,1);
+            return 1;
+        }
+    }
+
+    /* Scan all the Sentinels attached to this master to check if there
+     * is a leader for the specified epoch.
+     *
+     * To be a leader for a given epoch, we should have the majority of
+     * the Sentinels we know (ever seen since the last SENTINEL RESET) that
+     * reported the same instance as leader for the same epoch. */
+    // 在指定epoch的前提下，根据所有sentinel的投票结果计算是否已经选出了一个leader。
+    // 投票已经结束，此时sentinel的候选者角色转换为记票员，其目的是查看自己是否是leader，
+    // 成为leader就必须得到多数人的同意，并且其票数必须超过(Num(sentinel)/2 + 1) 或者 master->quorum
+    char *sentinelGetLeader(sentinelRedisInstance *master, uint64_t epoch) {
+        dict *counters;
+        dictIterator *di;
+        dictEntry *de;
+        unsigned int voters = 0, voters_quorum;
+        char *myvote;
+        char *winner = NULL;
+        uint64_t leader_epoch;
+        uint64_t max_votes = 0;
+
+        // master已经处于odown状态
+        redisAssert(master->flags & (SRI_O_DOWN|SRI_FAILOVER_IN_PROGRESS));
+        // 创建投票计账薄
+        counters = dictCreate(&leaderVotesDictType,NULL);
+        // 选民个数
+        voters = dictSize(master->sentinels)+1; /* All the other sentinels and me. */
+
+        /* Count other sentinels votes */
+        // 投票统计【暂不把当前sentinel的投票结果包含在内】
+        di = dictGetIterator(master->sentinels);
+        while((de = dictNext(di)) != NULL) {
+            sentinelRedisInstance *ri = dictGetVal(de);
+            if (ri->leader != NULL && ri->leader_epoch == sentinel.current_epoch)
+                sentinelLeaderIncr(counters,ri->leader);
+        }
+        dictReleaseIterator(di);
+
+        /* Check what's the winner. For the winner to win, it needs two conditions:
+         * 1) Absolute majority between voters (50% + 1).
+         * 2) And anyway at least master->quorum votes. */
+        // 计算出得票最多的候选者
+        di = dictGetIterator(counters);
+        while((de = dictNext(di)) != NULL) {
+            uint64_t votes = dictGetUnsignedIntegerVal(de);
+
+            if (votes > max_votes) {
+                max_votes = votes;
+                winner = dictGetKey(de);
+            }
+        }
+        dictReleaseIterator(di);
+
+        /* Count this Sentinel vote:
+         * if this Sentinel did not voted yet, either vote for the most
+         * common voted sentinel, or for itself if no vote exists at all. */
+        // 计算当前sentinel的投票结果
+        if (winner)
+            myvote = sentinelVoteLeader(master,epoch,winner,&leader_epoch);
+        else
+            // 如果没有winner，就把它自己作为候选人
+            myvote = sentinelVoteLeader(master,epoch,server.runid,&leader_epoch);
+
+        // 把当前sentinel推举出来的leader与所有其他的sentinel推举出来的候选人进行一番比较
+        if (myvote && leader_epoch == epoch) {
+            // 计算当前sentinel推举出来的leader的票数
+            uint64_t votes = sentinelLeaderIncr(counters,myvote);
+
+            // 如果自己推举的候选人的票数多于其他sentinel推举出来的候选人的票数，就更新winner
+            if (votes > max_votes) {
+                max_votes = votes;
+                winner = myvote;
+            }
+        }
+
+        // 判别最终获胜者的票数是否合乎下面两个法则中的一个：
+        // 1 得票数超过一半(Num(sentinel)/2 + 1)；
+        // 2 得票数超过master自己定下的最少得票数
+        voters_quorum = voters/2+1;
+        if (winner && (max_votes < voters_quorum || max_votes < master->quorum))
+            winner = NULL;
+
+        winner = winner ? sdsnew(winner) : NULL;
+        sdsfree(myvote);       // 自己推举的候选人
+        dictRelease(counters); // 记账薄
+        return winner;         // 最终获胜者
+    }
 
 </font>
 
@@ -2809,52 +2809,52 @@ Sentinel 自动故障迁移的一致性特质
         }
     }
 
-	/* Process the INFO output from masters. */
-	void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
-	    /* Handle slave -> master role switch. */
-	    if ((ri->flags & SRI_SLAVE) && role == SRI_MASTER) {
-	        /* If this is a promoted slave we can change state to the
-	         * failover state machine. */
-	        if ((ri->flags & SRI_PROMOTED) &&
-	            (ri->master->flags & SRI_FAILOVER_IN_PROGRESS) &&
-	            (ri->master->failover_state ==
-	                SENTINEL_FAILOVER_STATE_WAIT_PROMOTION))
-	        {
-	            /* Now that we are sure the slave was reconfigured as a master
-	             * set the master configuration epoch to the epoch we won the
-	             * election to perform this failover. This will force the other
-	             * Sentinels to update their config (assuming there is not
-	             * a newer one already available). */
-	            ri->master->config_epoch = ri->master->failover_epoch;
-	            ri->master->failover_state = SENTINEL_FAILOVER_STATE_RECONF_SLAVES;
-	            ri->master->failover_state_change_time = mstime();
-	            sentinelFlushConfig();
-	            sentinelEvent(REDIS_WARNING,"+promoted-slave",ri,"%@");
-	            sentinelEvent(REDIS_WARNING,"+failover-state-reconf-slaves",
-	                ri->master,"%@");
-	            sentinelCallClientReconfScript(ri->master,SENTINEL_LEADER,
-	                "start",ri->master->addr,ri->addr);
-	            sentinelForceHelloUpdateForMaster(ri->master);
-	        } else {
-	            /* A slave turned into a master. We want to force our view and
-	             * reconfigure as slave. Wait some time after the change before
-	             * going forward, to receive new configs if any. */
-	            mstime_t wait_time = SENTINEL_PUBLISH_PERIOD*4;
-	
-	            if (!(ri->flags & SRI_PROMOTED) &&
-	                 sentinelMasterLooksSane(ri->master) &&
-	                 sentinelRedisInstanceNoDownFor(ri,wait_time) &&
-	                 mstime() - ri->role_reported_time > wait_time)
-	            {
-	                int retval = sentinelSendSlaveOf(ri,
-	                        ri->master->addr->ip,
-	                        ri->master->addr->port);
-	                if (retval == REDIS_OK)
-	                    sentinelEvent(REDIS_NOTICE,"+convert-to-slave",ri,"%@");
-	            }
-	        }
-	    }
-	}	
+    /* Process the INFO output from masters. */
+    void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
+        /* Handle slave -> master role switch. */
+        if ((ri->flags & SRI_SLAVE) && role == SRI_MASTER) {
+            /* If this is a promoted slave we can change state to the
+             * failover state machine. */
+            if ((ri->flags & SRI_PROMOTED) &&
+                (ri->master->flags & SRI_FAILOVER_IN_PROGRESS) &&
+                (ri->master->failover_state ==
+                    SENTINEL_FAILOVER_STATE_WAIT_PROMOTION))
+            {
+                /* Now that we are sure the slave was reconfigured as a master
+                 * set the master configuration epoch to the epoch we won the
+                 * election to perform this failover. This will force the other
+                 * Sentinels to update their config (assuming there is not
+                 * a newer one already available). */
+                ri->master->config_epoch = ri->master->failover_epoch;
+                ri->master->failover_state = SENTINEL_FAILOVER_STATE_RECONF_SLAVES;
+                ri->master->failover_state_change_time = mstime();
+                sentinelFlushConfig();
+                sentinelEvent(REDIS_WARNING,"+promoted-slave",ri,"%@");
+                sentinelEvent(REDIS_WARNING,"+failover-state-reconf-slaves",
+                    ri->master,"%@");
+                sentinelCallClientReconfScript(ri->master,SENTINEL_LEADER,
+                    "start",ri->master->addr,ri->addr);
+                sentinelForceHelloUpdateForMaster(ri->master);
+            } else {
+                /* A slave turned into a master. We want to force our view and
+                 * reconfigure as slave. Wait some time after the change before
+                 * going forward, to receive new configs if any. */
+                mstime_t wait_time = SENTINEL_PUBLISH_PERIOD*4;
+
+                if (!(ri->flags & SRI_PROMOTED) &&
+                     sentinelMasterLooksSane(ri->master) &&
+                     sentinelRedisInstanceNoDownFor(ri,wait_time) &&
+                     mstime() - ri->role_reported_time > wait_time)
+                {
+                    int retval = sentinelSendSlaveOf(ri,
+                            ri->master->addr->ip,
+                            ri->master->addr->port);
+                    if (retval == REDIS_OK)
+                        sentinelEvent(REDIS_NOTICE,"+convert-to-slave",ri,"%@");
+                }
+            }
+        }
+    }
 
 </font>
 
