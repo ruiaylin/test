@@ -920,7 +920,8 @@ fake client用于aof模式下load aof文件的时候，重放客户端请求然�
 
 
 ## 参考文档：##
-   1 redis/src/replication.c
-   2 http://redis.readthedocs.org/en/latest/topic/replication.html
-   3 http://www.360doc.com/content/11/1205/14/7936054_169834858.shtml
+
+- 1 redis/src/replication.c
+- 2 http://redis.readthedocs.org/en/latest/topic/replication.html
+- 3 http://www.360doc.com/content/11/1205/14/7936054_169834858.shtml
 
