@@ -1,5 +1,7 @@
 # redis sentinel 源码分析 #
 ---
+*written by Alex Stocks on 2015/06/23*
+
 
 ##0 主要数据结构##
 
@@ -103,7 +105,6 @@
     } sentinelRedisInstance;`
 
 </font>
-
 
 ##1 main##
 

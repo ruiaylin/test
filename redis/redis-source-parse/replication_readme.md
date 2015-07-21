@@ -1,5 +1,6 @@
 # redis server replication 源码分析#
 ---
+*written by Alex Stocks on 2015/07/19*
 
 ##1 redis主流程 ##
 
@@ -912,11 +913,11 @@ fake client用于aof模式下load aof文件的时候，重放客户端请求然�
 
 ###4.2 replication过程中slave与master的函数流程图###
 
-![](./redis_replication.png)
+![](./pic/redis_replication.png)
 
 ###4.3 replication过程中slave与master的状态变化图###
 
-![](./redis_replication_interactive.png)
+![](./pic/redis_replication_interactive.png)
 
 
 ## 参考文档：##
