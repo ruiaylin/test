@@ -2503,7 +2503,7 @@ Sentinel 自动故障迁移的一致性特质
 
 <font color=blue>
 
-这一步对于是否进行failover非常重要，因为只有leader才有资格执行failover。
+这一步对于是否进行failover非常重要，因为只有leader才有资格执行failover。如果自己不是leader，待退出后可以通过info命令的结果得到master switch的结果。
 
 </font>
 
