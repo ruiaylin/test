@@ -854,12 +854,13 @@ fake client用于aof模式下load aof文件的时候，重放客户端请求然�
 
 </font>
 
-##2 slave 流程##
-
-###2.1 slave模式###
+###1.5 半道出家 ###
 
 <font color=blue>
-收到slaveof命令，启动slave模式
+
+>正常运行的实例[master or slave]，收到slaveof命令后更换master，启动slave模式。
+>
+>先断绝与已有的master以及slaves之间的连接，并放弃收到的或者将要发出的增量同步数据，然后初始化相关配置，设置状态为REDIS_REPL_CONNECT。
 </font>
 
 <font color=green>
@@ -886,8 +887,266 @@ fake client用于aof模式下load aof文件的时候，重放客户端请求然�
 					addReply(c,shared.ok);
 	}
 
+	/* Set replication to the specified master address and port. */
+	void replicationSetMaster(char *ip, int port) {
+	    sdsfree(server.masterhost);
+	    server.masterhost = sdsnew(ip);
+	    server.masterport = port;
+	    if (server.master) freeClient(server.master); // 断开与旧的master之间的连接
+	    disconnectAllBlockedClients(); /* Clients blocked in master, now slave. */ // 断开与所有client之间的连接
+	    disconnectSlaves(); /* Force our slaves to resync with us as well. */ // 断开与所有slave之间的连接
+	    replicationDiscardCachedMaster(); /* Don't try a PSYNC. */ // 放弃master发来的增量数据
+	    freeReplicationBacklog(); /* Don't allow our chained slaves to PSYNC. */ // 不再把增量数据同步给slaves
+	    cancelReplicationHandshake(); // 停止心跳
+        // 设置replication初始状态以及相关字段数据，同loadServerConfigFromString分析slaveof配置时设置相关字段的值一样
+	    server.repl_state = REDIS_REPL_CONNECT;
+	    server.master_repl_offset = 0;
+	    server.repl_down_since = 0;
+	}
+
 </font>
+
+##2 slave 流程##
+
+###2.1 连接master###
+
+<font color=blue>
+
+redis的timer响应函数ServerCron每秒调用一次replication的周期函数replicationCron。这个函数检查到slave还没有成功连接master时，先进行连接动作。
+
+连接动作由connectWithMaster完成。连接过程中会发出psync命令，尔后把状态更改为REDIS_REPL_CONNECTING。
+</font>
+
+<font color=green>
+
+	int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
+	    /* Replication cron function -- used to reconnect to master and
+	     * to detect transfer failures. */
+	    run_with_period(1000) replicationCron();
+	}
+
+	/* Replication cron function, called 1 time per second. */
+	void replicationCron(void) {
 	
+	    /* Check if we should connect to a MASTER */
+	    if (server.repl_state == REDIS_REPL_CONNECT) {
+	        redisLog(REDIS_NOTICE,"Connecting to MASTER %s:%d",
+	            server.masterhost, server.masterport);
+	        if (connectWithMaster() == REDIS_OK) {
+	            redisLog(REDIS_NOTICE,"MASTER <-> SLAVE sync started");
+	        }
+	    }
+	}
+
+	int connectWithMaster(void) {
+	    int fd;
+	
+	    fd = anetTcpNonBlockBindConnect(NULL,
+	        server.masterhost,server.masterport,REDIS_BIND_ADDR);
+	    if (fd == -1) {
+	        redisLog(REDIS_WARNING,"Unable to connect to MASTER: %s",
+	            strerror(errno));
+	        return REDIS_ERR;
+	    }
+	
+	    if (aeCreateFileEvent(server.el,fd,AE_READABLE|AE_WRITABLE,syncWithMaster,NULL) ==
+	            AE_ERR)
+	    {
+	        close(fd);
+	        redisLog(REDIS_WARNING,"Can't create readable event for SYNC");
+	        return REDIS_ERR;
+	    }
+	
+	    server.repl_transfer_lastio = server.unixtime;
+	    server.repl_transfer_s = fd;
+	    server.repl_state = REDIS_REPL_CONNECTING;
+	    return REDIS_OK;
+	}
+
+</font>
+
+###2.2 断开与master之间的连接###
+
+<font color=blue>
+
+如果处于REDIS_REPL_CONNECTING or REDIS_REPL_RECEIVE_PONG的状态，而且距离上次接收数据时间已经超时，则断开与master之间的连接，把状态置为REDIS_REPL_CONNECT。
+
+</font>
+
+<font color=green>
+
+	void replicationCron(void) {
+	    /* Non blocking connection timeout? */
+	    if (server.masterhost &&
+	        (server.repl_state == REDIS_REPL_CONNECTING ||
+	         server.repl_state == REDIS_REPL_RECEIVE_PONG) &&
+	        (time(NULL)-server.repl_transfer_lastio) > server.repl_timeout)
+	    {
+	        redisLog(REDIS_WARNING,"Timeout connecting to the MASTER...");
+	        undoConnectWithMaster();
+	    }
+	}
+
+	void undoConnectWithMaster(void) {
+	    int fd = server.repl_transfer_s;
+	
+	    redisAssert(server.repl_state == REDIS_REPL_CONNECTING ||
+	                server.repl_state == REDIS_REPL_RECEIVE_PONG);
+	    aeDeleteFileEvent(server.el,fd,AE_READABLE|AE_WRITABLE);
+	    close(fd);
+	    server.repl_transfer_s = -1;
+	    server.repl_state = REDIS_REPL_CONNECT;
+	}
+
+</font>
+
+###2.3 判断与master之间的连接是否成功并发出PING命令###
+
+<font color=blue>
+
+>连接成功之后要判断连接是否可写，待其可写才能认为连接成功。而上面的连接过程中，connect成功后就直接发出了PSYNC命令，所以需要在其reply函数中先检测连接是否有误。
+>
+>确定没有错误后再发出PING命令，状态更改为REDIS_REPL_RECEIVE_PONG。
+
+</font>
+
+<font color=green>
+
+	void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
+	    char tmpfile[256], *err;
+	    int dfd, maxtries = 5;
+	    int sockerr = 0, psync_result;
+	    socklen_t errlen = sizeof(sockerr);
+	    REDIS_NOTUSED(el);
+	    REDIS_NOTUSED(privdata);
+	    REDIS_NOTUSED(mask);
+	
+	    /* If this event fired after the user turned the instance into a master
+	     * with SLAVEOF NO ONE we must just return ASAP. */
+	    // 如果收到了SLAVEOF NO ONE命令，则立即关闭与master之间的连接，并退出
+	    if (server.repl_state == REDIS_REPL_NONE) {
+	        close(fd);
+	        return;
+	    }
+	
+		// 检查连接是否有问题
+	    /* Check for errors in the socket. */
+	    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &errlen) == -1)
+	        sockerr = errno;
+	    if (sockerr) {
+	        aeDeleteFileEvent(server.el,fd,AE_READABLE|AE_WRITABLE);
+	        redisLog(REDIS_WARNING,"Error condition on socket for SYNC: %s",
+	            strerror(sockerr));
+	        goto error;
+	    }
+	
+	    /* If we were connecting, it's time to send a non blocking PING, we want to
+	     * make sure the master is able to reply before going into the actual
+	     * replication process where we have long timeouts in the order of
+	     * seconds (in the meantime the slave would block). */
+	    if (server.repl_state == REDIS_REPL_CONNECTING) {
+	        redisLog(REDIS_NOTICE,"Non blocking connect for SYNC fired the event.");
+	        /* Delete the writable event so that the readable event remains
+	         * registered and we can wait for the PONG reply. */
+	        // 删除写事件，只保留读事件，等地啊PONG响应
+	        aeDeleteFileEvent(server.el,fd,AE_WRITABLE);
+	        server.repl_state = REDIS_REPL_RECEIVE_PONG;
+	        /* Send the PING, don't check for errors at all, we have the timeout
+	         * that will take care about this. */
+	        // 此处并不检查是否遇到error，上面2.2小节与处理这个逻辑：超时处理
+	        syncWrite(fd,"PING\r\n",6,100);
+	        return;
+	    }
+	}
+
+</font>
+
+###2.3.1 发出PING命令，阻塞等待响应 ###
+
+<font color=green>
+
+	/* Write the specified payload to 'fd'. If writing the whole payload will be
+	 * done within 'timeout' milliseconds the operation succeeds and 'size' is
+	 * returned. Otherwise the operation fails, -1 is returned, and an unspecified
+	 * partial write could be performed against the file descriptor. */
+	ssize_t syncWrite(int fd, char *ptr, ssize_t size, long long timeout) {
+	    ssize_t nwritten, ret = size;
+	    long long start = mstime();
+	    long long remaining = timeout;
+	
+	    while(1) {
+	        long long wait = (remaining > REDIS_SYNCIO_RESOLUTION) ?
+	                          remaining : REDIS_SYNCIO_RESOLUTION;
+	        long long elapsed;
+	
+	        /* Optimistically try to write before checking if the file descriptor
+	         * is actually writable. At worst we get EAGAIN. */
+	        nwritten = write(fd,ptr,size);
+	        if (nwritten == -1) {
+	            if (errno != EAGAIN) return -1;
+	        } else {
+	            ptr += nwritten;
+	            size -= nwritten;
+	        }
+	        if (size == 0) return ret;
+	
+	        /* Wait */
+	        aeWait(fd,AE_WRITABLE,wait);
+	        elapsed = mstime() - start;
+	        if (elapsed >= timeout) {
+	            errno = ETIMEDOUT;
+	            return -1;
+	        }
+	        remaining = timeout - elapsed;
+	    }
+	}
+
+</font>
+
+###2.4 接收PING响应###
+
+<font color=green>
+
+	void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
+	    /* Receive the PONG command. */
+	    if (server.repl_state == REDIS_REPL_RECEIVE_PONG) {
+	        char buf[1024];
+	
+	        /* Delete the readable event, we no longer need it now that there is
+	         * the PING reply to read. */
+	        aeDeleteFileEvent(server.el,fd,AE_READABLE);
+	
+	        /* Read the reply with explicit timeout. */
+	        buf[0] = '\0';
+	        if (syncReadLine(fd,buf,sizeof(buf),
+	            server.repl_syncio_timeout*1000) == -1)
+	        {
+	            redisLog(REDIS_WARNING,
+	                "I/O error reading PING reply from master: %s",
+	                strerror(errno));
+	            goto error;
+	        }
+	
+	        /* We accept only two replies as valid, a positive +PONG reply
+	         * (we just check for "+") or an authentication error.
+	         * Note that older versions of Redis replied with "operation not
+	         * permitted" instead of using a proper error code, so we test
+	         * both. */
+	        if (buf[0] != '+' &&
+	            strncmp(buf,"-NOAUTH",7) != 0 &&
+	            strncmp(buf,"-ERR operation not permitted",28) != 0)
+	        {
+	            redisLog(REDIS_WARNING,"Error reply to PING from master: '%s'",buf);
+	            goto error;
+	        } else {
+	            redisLog(REDIS_NOTICE,
+	                "Master replied to PING, replication can continue...");
+	        }
+	    }
+	}
+
+</font>
+
 ##3 master流程##
 
 

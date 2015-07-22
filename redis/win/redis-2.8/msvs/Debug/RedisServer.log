@@ -1,0 +1,169 @@
+﻿生成启动时间为 2015/7/18 14:35:42。
+     1>项目“C:\test\src\redis-2.8\msvs\RedisServer.vcxproj”在节点 4 上(Rebuild 个目标)。
+     1>ClCompile:
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\CL.exe /c /I"C:\test\src\redis-2.8\msvs\..\deps\lua\src" /I"C:\test\src\redis-2.8\msvs\..\deps\hiredis" /Zi /nologo /W3 /WX- /Od /Oy- /GL /D _OFF_T_DEFINED /D WIN32 /D USE_DL_PREFIX /D LACKS_STDLIB_H /D _DEBUG /D _CONSOLE /D __x86_64__ /D _USING_V110_SDK71_ /D USE_DLMALLOC /D WIN32_IOCP /D _WIN32_WINNT=0x0501 /Gm /EHsc /RTC1 /MTd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TC /wd4996 /wd4146 /analyze- /errorReport:prompt ..\src\adlist.c ..\src\ae.c ..\src\anet.c ..\src\aof.c ..\src\bio.c ..\src\bitops.c ..\src\conf.c ..\src\config.c ..\src\crc64.c ..\src\db.c ..\src\debug.c ..\src\dict.c ..\src\endianconv.c ..\src\hyperloglog.c ..\src\intset.c ..\src\latency.c ..\src\lzf_c.c ..\src\lzf_d.c ..\src\memtest.c ..\src\migrate.c ..\src\multi.c ..\src\networking.c ..\src\notify.c ..\src\object.c ..\src\pqsort.c ..\src\pubsub.c ..\src\rand.c ..\src\rdb.c ..\src\redis.c ..\src\release.c ..\src\replication.c ..\src\rio.c ..\src\scripting.c ..\src\sds.c ..\src\sentinel.c ..\src\sha1.c ..\src\slowlog.c ..\src\sort.c ..\src\sparkline.c ..\src\syncio.c ..\src\t_conf.c ..\src\t_hash.c ..\src\t_list.c ..\src\t_set.c ..\src\t_string.c ..\src\t_zset.c ..\src\util.c ..\src\ziplist.c ..\src\zipmap.c ..\src\zmalloc.c
+         zmalloc.c
+         zipmap.c
+         ziplist.c
+         util.c
+         t_zset.c
+         t_string.c
+     1>..\src\t_string.c(265): warning C4244: “函数”: 从“__int64”转换到“size_t”，可能丢失数据
+         t_set.c
+         t_list.c
+         t_hash.c
+         t_conf.c
+         syncio.c
+     1>..\src\syncio.c(61): warning C4244: “函数”: 从“ssize_t”转换到“size_t”，可能丢失数据
+     1>..\src\syncio.c(98): warning C4244: “函数”: 从“ssize_t”转换到“size_t”，可能丢失数据
+         sparkline.c
+         sort.c
+         slowlog.c
+         sha1.c
+         sentinel.c
+         sds.c
+         scripting.c
+         rio.c
+     1>..\src\rio.c(221): warning C4244: “+=”: 从“ssize_t”转换到“size_t”，可能丢失数据
+         replication.c
+     1>..\src\replication.c(78): warning C4244: “函数”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\replication.c(112): warning C4244: “函数”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\replication.c(138): warning C4244: “初始化”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\replication.c(350): warning C4244: “函数”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\replication.c(1059): warning C4244: “函数”: 从“ssize_t”转换到“size_t”，可能丢失数据
+     1>..\src\replication.c(1098): warning C4244: “初始化”: 从“ssize_t”转换到“int”，可能丢失数据
+     1>..\src\replication.c(1100): warning C4244: “函数”: 从“ssize_t”转换到“size_t”，可能丢失数据
+     1>..\src\replication.c(1106): warning C4244: “函数”: 从“ssize_t”转换到“size_t”，可能丢失数据
+         正在编译...
+         release.c
+         redis.c
+         rdb.c
+     1>..\src\rdb.c(1192): warning C4244: “=”: 从“off_t”转换到“size_t”，可能丢失数据
+     1>..\src\rdb.c(1360): warning C4244: “=”: 从“uint64_t”转换到“int”，可能丢失数据
+     1>..\src\rdb.c(1395): warning C4244: “=”: 从“uint64_t”转换到“int”，可能丢失数据
+         rand.c
+         pubsub.c
+         pqsort.c
+         object.c
+         notify.c
+         networking.c
+     1>..\src\networking.c(1202): warning C4244: “函数”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\networking.c(1311): warning C4244: “=”: 从“ssize_t”转换到“int”，可能丢失数据
+         multi.c
+         migrate.c
+     1>..\src\migrate.c(205): warning C4244: “=”: 从“ssize_t”转换到“int”，可能丢失数据
+         memtest.c
+         lzf_d.c
+         lzf_c.c
+         latency.c
+         intset.c
+         hyperloglog.c
+     1>..\src\hyperloglog.c(1425): warning C4244: “初始化”: 从“double”转换到“uint64_t”，可能丢失数据
+         endianconv.c
+         dict.c
+         debug.c
+         正在编译...
+         db.c
+     1>..\src\db.c(715): warning C4244: “函数”: 从“__int64”转换到“int”，可能丢失数据
+         crc64.c
+         config.c
+     1>..\src\config.c(437): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(439): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(441): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(443): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(445): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(447): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(449): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(451): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(833): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(836): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(839): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(842): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(845): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(848): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(851): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(854): warning C4244: “=”: 从“__int64”转换到“size_t”，可能丢失数据
+     1>..\src\config.c(974): warning C4244: “=”: 从“__int64”转换到“int”，可能丢失数据
+     1>..\src\config.c(1764): warning C4244: “函数”: 从“__int64”转换到“size_t”，可能丢失数据
+         conf.c
+     1>..\src\conf.c(158): warning C4013: “sdstrimspace”未定义；假设外部返回 int
+     1>..\src\conf.c(253): warning C4013: “_lseek”未定义；假设外部返回 int
+     1>..\src\conf.c(258): warning C4133: “函数”: 从“stat *”到“_stat64i32 *”的类型不兼容
+     1>..\src\conf.c(272): warning C4013: “_read”未定义；假设外部返回 int
+     1>..\src\conf.c(345): warning C4013: “_open”未定义；假设外部返回 int
+     1>..\src\conf.c(363): warning C4013: “_close”未定义；假设外部返回 int
+         bitops.c
+         bio.c
+     1>..\src\bio.c(111): warning C4244: “=”: 从“ssize_t”转换到“size_t”，可能丢失数据
+         aof.c
+     1>..\src\aof.c(367): warning C4244: “函数”: 从“ssize_t”转换到“int”，可能丢失数据
+         anet.c
+     1>..\src\anet.c(213): warning C4244: “=”: 从“__int64”转换到“long”，可能丢失数据
+     1>..\src\anet.c(464): warning C4244: “=”: 从“ssize_t”转换到“int”，可能丢失数据
+     1>..\src\anet.c(479): warning C4244: “=”: 从“ssize_t”转换到“int”，可能丢失数据
+         ae.c
+         adlist.c
+       Link:
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\test\src\redis-2.8\msvs\Debug\redis-server.exe" /INCREMENTAL:NO /NOLOGO /LIBPATH:"C:\test\src\redis-2.8\msvs\Debug\\" /LIBPATH:"C:\test\src\redis-2.8\msvs\Debug\lib" psapi.lib kernel32.lib user32.lib gdi32.lib winspool.lib advapi32.lib shell32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /NODEFAULTLIB:MSVCRT.lib /MANIFEST:NO /DEBUG /PDB:"C:\test\src\redis-2.8\msvs\Debug\redis-server.pdb" /SUBSYSTEM:CONSOLE,"5.01" /LTCG /TLBID:1 /DYNAMICBASE:NO /NXCOMPAT /IMPLIB:"C:\test\src\redis-2.8\msvs\Debug\redis-server.lib" /MACHINE:X86 Debug\adlist.obj
+         Debug\ae.obj
+         Debug\anet.obj
+         Debug\aof.obj
+         Debug\bio.obj
+         Debug\bitops.obj
+         Debug\conf.obj
+         Debug\config.obj
+         Debug\crc64.obj
+         Debug\db.obj
+         Debug\debug.obj
+         Debug\dict.obj
+         Debug\endianconv.obj
+         Debug\hyperloglog.obj
+         Debug\intset.obj
+         Debug\latency.obj
+         Debug\lzf_c.obj
+         Debug\lzf_d.obj
+         Debug\memtest.obj
+         Debug\migrate.obj
+         Debug\multi.obj
+         Debug\networking.obj
+         Debug\notify.obj
+         Debug\object.obj
+         Debug\pqsort.obj
+         Debug\pubsub.obj
+         Debug\rand.obj
+         Debug\rdb.obj
+         Debug\redis.obj
+         Debug\release.obj
+         Debug\replication.obj
+         Debug\rio.obj
+         Debug\scripting.obj
+         Debug\sds.obj
+         Debug\sentinel.obj
+         Debug\sha1.obj
+         Debug\slowlog.obj
+         Debug\sort.obj
+         Debug\sparkline.obj
+         Debug\syncio.obj
+         Debug\t_conf.obj
+         Debug\t_hash.obj
+         Debug\t_list.obj
+         Debug\t_set.obj
+         Debug\t_string.obj
+         Debug\t_zset.obj
+         Debug\util.obj
+         Debug\ziplist.obj
+         Debug\zipmap.obj
+         Debug\zmalloc.obj
+         ..\src\Win32_Interop\resources\EventLog.res
+         "C:\test\src\redis-2.8\msvs\Debug\Win32_Interop.lib"
+         "C:\test\src\redis-2.8\msvs\Debug\hiredis.lib"
+         "C:\test\src\redis-2.8\msvs\Debug\lua.lib"
+     1>Win32_Interop.lib(win32_wsiocp.obj) : warning LNK4075: 忽略“/EDITANDCONTINUE”(由于“/OPT:LBR”规范)
+         正在生成代码
+         已完成代码的生成
+         RedisServer.vcxproj -> C:\test\src\redis-2.8\msvs\Debug\redis-server.exe
+     1>已完成生成项目“C:\test\src\redis-2.8\msvs\RedisServer.vcxproj”(Rebuild 个目标)的操作。
+
+生成成功。
+
+已用时间 00:00:08.74
