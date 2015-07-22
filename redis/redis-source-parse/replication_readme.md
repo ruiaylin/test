@@ -1004,7 +1004,9 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 
 <font color=blue>
 
->连接成功之后要判断连接是否可写，待其可写才能认为连接成功。而上面的连接过程中，connect成功后就直接发出了PSYNC命令，所以需要在其reply函数中先检测连接是否有误。
+>正常的connect异步流程是：先connect，而后判断fd是否可写，最后再判断连接是否有误。而上面的连接过程中，connect成功后就直接发出了PSYNC命令，所以收到其reply函数syncWithMaster就意味着server.sync_transfer_s确实可写。
+>
+>syncWithMaster函数起始逻辑就是判断fd是否有error，这个是继续连接流程的第三步，如果没有error就可以确认连接可读可写而且没有error，此时就可以删除对可写事件的关注。
 >
 >确定没有错误后再发出PING命令，状态更改为REDIS_REPL_RECEIVE_PONG。
 
@@ -1044,6 +1046,7 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 	     * make sure the master is able to reply before going into the actual
 	     * replication process where we have long timeouts in the order of
 	     * seconds (in the meantime the slave would block). */
+	    // 如果还在连接中而未确认连接已经成功，需要确认master能够对PING命令回复PONG，则需要以阻塞形式把PING命令发送出去
 	    if (server.repl_state == REDIS_REPL_CONNECTING) {
 	        redisLog(REDIS_NOTICE,"Non blocking connect for SYNC fired the event.");
 	        /* Delete the writable event so that the readable event remains
@@ -1053,7 +1056,7 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 	        server.repl_state = REDIS_REPL_RECEIVE_PONG;
 	        /* Send the PING, don't check for errors at all, we have the timeout
 	         * that will take care about this. */
-	        // 此处并不检查是否遇到error，上面2.2小节与处理这个逻辑：超时处理
+	        // 此处并不检查是否遇到error，如果超时后内容还没有发送出去，上面2.2小节与处理这个逻辑：超时处理
 	        syncWrite(fd,"PING\r\n",6,100);
 	        return;
 	    }
@@ -1061,20 +1064,57 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 
 </font>
 
-###2.3.1 发出PING命令，阻塞等待响应 ###
+###2.3.1 以阻塞方式发出PING命令 ###
 
 <font color=green>
+
+	/* Wait for milliseconds until the given file descriptor becomes
+	 * writable/readable/exception */
+	// 借用poll函数阻塞@milliseconds，然后判断@fd是否满足条件@mask
+	int aeWait(int fd, int mask, long long milliseconds) {
+	    struct pollfd pfd;
+	    int retmask = 0, retval;
+	
+	    memset(&pfd, 0, sizeof(pfd));
+	    pfd.fd = fd;
+	    if (mask & AE_READABLE) pfd.events |= POLLIN;
+	    if (mask & AE_WRITABLE) pfd.events |= POLLOUT;
+	
+	    if ((retval = poll(&pfd, 1, milliseconds))== 1) {
+	        if (pfd.revents & POLLIN) retmask |= AE_READABLE;
+	        if (pfd.revents & POLLOUT) retmask |= AE_WRITABLE;
+		if (pfd.revents & POLLERR) retmask |= AE_WRITABLE;
+	        if (pfd.revents & POLLHUP) retmask |= AE_WRITABLE;
+	        return retmask;
+	    } else {
+	        return retval;
+	    }
+	}
+
+	/* Redis performs most of the I/O in a nonblocking way, with the exception
+	 * of the SYNC command where the slave does it in a blocking way, and
+	 * the MIGRATE command that must be blocking in order to be atomic from the
+	 * point of view of the two instances (one migrating the key and one receiving
+	 * the key). This is why need the following blocking I/O functions.
+	 *
+	 * All the functions take the timeout in milliseconds. */
+	// redis执行大部分命令都是以异步方式运行，但sync和migrate任务除外。
+    // 因为migrate任务是执行数据同步工作，命令执行完就意味着两端的数据是一样的，所以须以同步方式执行
+	
+	#define REDIS_SYNCIO_RESOLUTION 10 /* Resolution in milliseconds */
 
 	/* Write the specified payload to 'fd'. If writing the whole payload will be
 	 * done within 'timeout' milliseconds the operation succeeds and 'size' is
 	 * returned. Otherwise the operation fails, -1 is returned, and an unspecified
 	 * partial write could be performed against the file descriptor. */
+	// 以阻塞形式把ptr[size]通过连接@fd发送出去
 	ssize_t syncWrite(int fd, char *ptr, ssize_t size, long long timeout) {
 	    ssize_t nwritten, ret = size;
 	    long long start = mstime();
 	    long long remaining = timeout;
 	
 	    while(1) {
+			// 修正等待时间为10ms，因为linux给每个进程分配的时间片长度是10ms
 	        long long wait = (remaining > REDIS_SYNCIO_RESOLUTION) ?
 	                          remaining : REDIS_SYNCIO_RESOLUTION;
 	        long long elapsed;
@@ -1104,6 +1144,12 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 </font>
 
 ###2.4 接收PING响应###
+
+<font color=blue>
+
+再次受到对PSYNC命令的响应，就是收到PONG响应。如果需要进行密码验证，就进行发送密码进行验证，注意发送的密码就是slave自己的密码，这里隐含着一个条件：master-slave级联模式下主从的密码须一致。
+
+</font>
 
 <font color=green>
 
@@ -1142,6 +1188,17 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 	            redisLog(REDIS_NOTICE,
 	                "Master replied to PING, replication can continue...");
 	        }
+	    }
+	
+	    /* AUTH with the master if required. */
+	    if(server.masterauth) {
+	        err = sendSynchronousCommand(fd,"AUTH",server.masterauth,NULL);
+	        if (err[0] == '-') {
+	            redisLog(REDIS_WARNING,"Unable to AUTH to MASTER: %s",err);
+	            sdsfree(err);
+	            goto error;
+	        }
+	        sdsfree(err);
 	    }
 	}
 
