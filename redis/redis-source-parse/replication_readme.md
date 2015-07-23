@@ -1143,11 +1143,13 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 
 </font>
 
-###2.4 接收PING响应###
+###2.4 接收PING响应并进行数据同步 ###
 
 <font color=blue>
 
-再次受到对PSYNC命令的响应，就是收到PONG响应。如果需要进行密码验证，就进行发送密码进行验证，注意发送的密码就是slave自己的密码，这里隐含着一个条件：master-slave级联模式下主从的密码须一致。
+>再次收到对PSYNC命令的响应，就是收到PONG响应。如果需要进行密码验证，就进行发送密码进行验证，注意发送的密码就是slave自己的密码，这里隐含着一个条件：master-slave级联模式下主从的密码须一致。
+>
+>尔后通过AUTH & REPLCONF命令发送密码验证和自己的listenning port后，先尝试进行增量同步。这一步其实涉及到 redis 2.8版本以前的一个bug：如果master和slave之间正在执行数据同步的时候网络闪断，那么连接重新建立以后每次都要重新全量的接收数据！所以redis 2.8以后的版本就有了这个patch。
 
 </font>
 
@@ -1164,6 +1166,7 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 	
 	        /* Read the reply with explicit timeout. */
 	        buf[0] = '\0';
+			// syncReadLine是以阻塞地方式读取回复，同syncWrite
 	        if (syncReadLine(fd,buf,sizeof(buf),
 	            server.repl_syncio_timeout*1000) == -1)
 	        {
@@ -1178,6 +1181,7 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 	         * Note that older versions of Redis replied with "operation not
 	         * permitted" instead of using a proper error code, so we test
 	         * both. */
+	        // 检查回复内容，处理除却noauth之类的其他错误
 	        if (buf[0] != '+' &&
 	            strncmp(buf,"-NOAUTH",7) != 0 &&
 	            strncmp(buf,"-ERR operation not permitted",28) != 0)
@@ -1200,6 +1204,307 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 	        }
 	        sdsfree(err);
 	    }
+	
+	    /* Set the slave port, so that Master's INFO command can list the
+	     * slave listening port correctly. */
+	    // 向server汇报自己的接收数据的端口
+	    {
+	        sds port = sdsfromlonglong(server.port);
+	        err = sendSynchronousCommand(fd,"REPLCONF","listening-port",port,
+	                                         NULL);
+	        sdsfree(port);
+	        /* Ignore the error if any, not all the Redis versions support
+	         * REPLCONF listening-port. */
+	        if (err[0] == '-') {
+	            redisLog(REDIS_NOTICE,"(Non critical) Master does not understand REPLCONF listening-port: %s", err);
+	        }
+	        sdsfree(err);
+	    }
+	
+	    /* Try a partial resynchonization. If we don't have a cached master
+	     * slaveTryPartialResynchronization() will at least try to use PSYNC
+	     * to start a full resynchronization so that we get the master run id
+	     * and the global offset, to try a partial resync at the next
+	     * reconnection attempt. */
+	    // 尝试增量同步
+	    psync_result = slaveTryPartialResynchronization(fd);
+	    if (psync_result == PSYNC_CONTINUE) {
+	        redisLog(REDIS_NOTICE, "MASTER <-> SLAVE sync: Master accepted a Partial Resynchronization.");
+	        return;
+	    }
+	
+	    /* Fall back to SYNC if needed. Otherwise psync_result == PSYNC_FULLRESYNC
+	     * and the server.repl_master_runid and repl_master_initial_offset are
+	     * already populated. */
+	    // 如果不支持增量同步，那么就进行全量同步
+	    if (psync_result == PSYNC_NOT_SUPPORTED) {
+	        redisLog(REDIS_NOTICE,"Retrying with SYNC...");
+	        if (syncWrite(fd,"SYNC\r\n",6,server.repl_syncio_timeout*1000) == -1) {
+	            redisLog(REDIS_WARNING,"I/O error writing to MASTER: %s",
+	                strerror(errno));
+	            goto error;
+	        }
+	    }
+	
+	    /* Prepare a suitable temp file for bulk transfer */
+	    while(maxtries--) {
+	        snprintf(tmpfile,256,
+	            "temp-%d.%ld.rdb",(int)server.unixtime,(long int)getpid());
+	        dfd = open(tmpfile,O_CREAT|O_WRONLY|O_EXCL,0644);
+	        if (dfd != -1) break;
+	        sleep(1);
+	    }
+	    if (dfd == -1) {
+	        redisLog(REDIS_WARNING,"Opening the temp file needed for MASTER <-> SLAVE synchronization: %s",strerror(errno));
+	        goto error;
+	    }
+	
+	    /* Setup the non blocking download of the bulk file. */
+		// 接收全量数据
+	    if (aeCreateFileEvent(server.el,fd, AE_READABLE,readSyncBulkPayload,NULL)
+	            == AE_ERR)
+	    {
+	        redisLog(REDIS_WARNING,
+	            "Can't create readable event for SYNC: %s (fd=%d)",
+	            strerror(errno),fd);
+	        goto error;
+	    }
+	
+	    server.repl_state = REDIS_REPL_TRANSFER;
+	    server.repl_transfer_size = -1;
+	    server.repl_transfer_read = 0;
+	    server.repl_transfer_last_fsync_off = 0;
+	    server.repl_transfer_fd = dfd;
+	    server.repl_transfer_lastio = server.unixtime;
+	    server.repl_transfer_tmpfile = zstrdup(tmpfile);
+	    return;
+	
+	error:
+	    close(fd);
+	    server.repl_transfer_s = -1;
+	    server.repl_state = REDIS_REPL_CONNECT;
+	    return;
+	}
+
+</font>
+
+####2.4.1 以同步方式发送AUTH & REPLCONF命令，并等待reply ####
+
+	/* Send a synchronous command to the master. Used to send AUTH and
+	 * REPLCONF commands before starting the replication with SYNC.
+	 *
+	 * The command returns an sds string representing the result of the
+	 * operation. On error the first byte is a "-".
+	 */
+	char *sendSynchronousCommand(int fd, ...) {
+	    va_list ap;
+	    sds cmd = sdsempty();
+	    char *arg, buf[256];
+	
+	    /* Create the command to send to the master, we use simple inline
+	     * protocol for simplicity as currently we only send simple strings. */
+	    va_start(ap,fd);
+	    while(1) {
+	        arg = va_arg(ap, char*);
+	        if (arg == NULL) break;
+	
+	        if (sdslen(cmd) != 0) cmd = sdscatlen(cmd," ",1);
+	        cmd = sdscat(cmd,arg);
+	    }
+	    cmd = sdscatlen(cmd,"\r\n",2);
+	
+	    /* Transfer command to the server. */
+	    if (syncWrite(fd,cmd,sdslen(cmd),server.repl_syncio_timeout*1000) == -1) {
+	        sdsfree(cmd);
+	        return sdscatprintf(sdsempty(),"-Writing to master: %s",
+	                strerror(errno));
+	    }
+	    sdsfree(cmd);
+	
+	    /* Read the reply from the server. */
+	    if (syncReadLine(fd,buf,sizeof(buf),server.repl_syncio_timeout*1000) == -1)
+	    {
+	        return sdscatprintf(sdsempty(),"-Reading from master: %s",
+	                strerror(errno));
+	    }
+	    return sdsnew(buf);
+	}
+
+</font>
+
+####2.4.2 增量同步 ####
+
+<font color=blue>
+
+有增量同步特性的主服务器为被发送的复制流创建一个内存缓冲区（in-memory backlog）， 并且主服务器和所有从服务器之间都记录一个复制偏移量（replication offset）和一个主服务器 ID （master run id），当出现闪断但是slave又重新连接成功后，如果：
+
+- 如果从服务器记录的主服务器 ID 和当前要连接的主服务器的 ID 相同
+- 并且从服务器记录的偏移量所指定的数据仍然保存在主服务器的复制流缓冲区里面
+
+满足以上两个条件，那么主服务器会向从服务器发送断线时缺失的那部分数据。否则的话， 从服务器就要执执行全量同步操作。
+
+</font>
+
+<font color=green>
+
+	//master拒绝增量同步，释放与master之间的连接
+	void replicationDiscardCachedMaster(void) {
+	    if (server.cached_master == NULL) return;
+	
+	    redisLog(REDIS_NOTICE,"Discarding previously cached master state.");
+	    server.cached_master->flags &= ~REDIS_MASTER;
+	    freeClient(server.cached_master);
+	    server.cached_master = NULL;
+	}
+
+	/* Turn the cached master into the current master, using the file descriptor
+	 * passed as argument as the socket for the new master.
+	 *
+	 * This function is called when successfully setup a partial resynchronization
+	 * so the stream of data that we'll receive will start from were this
+	 * master left. */
+	void replicationResurrectCachedMaster(int newfd) {
+	    server.master = server.cached_master;
+	    server.cached_master = NULL;
+	    server.master->fd = newfd;
+	    server.master->flags &= ~(REDIS_CLOSE_AFTER_REPLY|REDIS_CLOSE_ASAP);
+	    server.master->authenticated = 1;
+	    server.master->lastinteraction = server.unixtime;
+	    server.repl_state = REDIS_REPL_CONNECTED;
+	
+	    /* Re-add to the list of clients. */
+	    listAddNodeTail(server.clients,server.master);
+	    if (aeCreateFileEvent(server.el, newfd, AE_READABLE,
+	                          readQueryFromClient, server.master)) {
+	        redisLog(REDIS_WARNING,"Error resurrecting the cached master, impossible to add the readable handler: %s", strerror(errno));
+	        freeClientAsync(server.master); /* Close ASAP. */
+	    }
+	
+	    /* We may also need to install the write handler as well if there is
+	     * pending data in the write buffers. */
+	    if (server.master->bufpos || listLength(server.master->reply)) {
+	        if (aeCreateFileEvent(server.el, newfd, AE_WRITABLE,
+	                          sendReplyToClient, server.master)) {
+	            redisLog(REDIS_WARNING,"Error resurrecting the cached master, impossible to add the writable handler: %s", strerror(errno));
+	            freeClientAsync(server.master); /* Close ASAP. */
+	        }
+	    }
+	}
+
+	/* 
+	 * 这个函数用于应对与master之间的增量同步。如果没有cached_master，则PSYNC的参
+	 * 数可以设置为"-1"，至少可以全量同步所需要的两个参数：master的server id和
+	 * offset。这个函数用来被函数syncWithMaster调用，所以应满足下面两个条件:
+	 *
+	 * 1) master和slave之间的连接已经建立起来。
+	 * 2) 这个函数不会close掉这个连接，接下来的增量同步还会使用到它。
+	 *
+	 * 函数的返回值:
+	 *
+	 * PSYNC_CONTINUE: 准备好进行增量同步，此时可以通过
+	 *                 replicationResurrectCachedMaster函数保存
+	 *                 与master之间的连接
+	 * PSYNC_FULLRESYNC: master虽然支持增量同步，但是与slave之前并没有进行过数
+	 *                   据同步，二者之间应该进行全量数据同步，master会把master
+	 *                   run_id和全局复制offset告知slave
+	 * PSYNC_NOT_SUPPORTED: master不支持PSYNC命令
+	 */
+	
+	#define PSYNC_CONTINUE 0
+	#define PSYNC_FULLRESYNC 1
+	#define PSYNC_NOT_SUPPORTED 2
+
+	int slaveTryPartialResynchronization(int fd) {
+	    char *psync_runid;
+	    char psync_offset[32];
+	    sds reply;
+	
+	    /* Initially set repl_master_initial_offset to -1 to mark the current
+	     * master run_id and offset as not valid. Later if we'll be able to do
+	     * a FULL resync using the PSYNC command we'll set the offset at the
+	     * right value, so that this information will be propagated to the
+	     * client structure representing the master into server.master. */
+	    // 把repl_master_initial_offset以说明master run_id和offset无效
+		server.repl_master_initial_offset = -1;
+	
+		// 把自己记录的server runid和offset发送给master
+	    if (server.cached_master) {
+	        psync_runid = server.cached_master->replrunid;
+	        snprintf(psync_offset,sizeof(psync_offset),"%lld", server.cached_master->reploff+1);
+	        redisLog(REDIS_NOTICE,"Trying a partial resynchronization (request %s:%s).", psync_runid, psync_offset);
+	    } else {
+	        redisLog(REDIS_NOTICE,"Partial resynchronization not possible (no cached master)");
+	        psync_runid = "?";
+	        memcpy(psync_offset,"-1",3);
+	    }
+	
+	    /* Issue the PSYNC command */
+		// 以同步方式发出PSYNC命令以及其参数runid & offset，并获取reply
+	    reply = sendSynchronousCommand(fd,"PSYNC",psync_runid,psync_offset,NULL);
+	
+        //  如果回复是FULLRESYNC，则分析回复的runid & offset
+	    if (!strncmp(reply,"+FULLRESYNC",11)) {
+	        char *runid = NULL, *offset = NULL;
+	
+	        /* FULL RESYNC, parse the reply in order to extract the run id
+	         * and the replication offset. */
+	        runid = strchr(reply,' ');
+	        if (runid) {
+	            runid++;
+	            offset = strchr(runid,' ');
+	            if (offset) offset++;
+	        }
+	        if (!runid || !offset || (offset-runid-1) != REDIS_RUN_ID_SIZE) {
+	            redisLog(REDIS_WARNING,
+	                "Master replied with wrong +FULLRESYNC syntax.");
+	            /* This is an unexpected condition, actually the +FULLRESYNC
+	             * reply means that the master supports PSYNC, but the reply
+	             * format seems wrong. To stay safe we blank the master
+	             * runid to make sure next PSYNCs will fail. */
+	            // master是支持psync的，但是由于发送给master的runid & offset不正确，所以为了数据完整性还是进行全量同步为妥
+	            memset(server.repl_master_runid,0,REDIS_RUN_ID_SIZE+1);
+	        } else {
+				// 记录全量同步其实参数runid & offset
+	            memcpy(server.repl_master_runid, runid, offset-runid-1); // offset 和 runid分别是reply字符串起始处的指针
+	            server.repl_master_runid[REDIS_RUN_ID_SIZE] = '\0';
+	            server.repl_master_initial_offset = strtoll(offset,NULL,10);
+	            redisLog(REDIS_NOTICE,"Full resync from master: %s:%lld",
+	                server.repl_master_runid,
+	                server.repl_master_initial_offset);
+	        }
+	        /* We are going to full resync, discard the cached master structure. */
+            // 释放master与client之间的连接，开始进行全量同步
+	        replicationDiscardCachedMaster();
+	        sdsfree(reply);
+	        return PSYNC_FULLRESYNC;
+	    }
+	
+		// master答应增量同步
+	    if (!strncmp(reply,"+CONTINUE",9)) {
+	        /* Partial resync was accepted, set the replication state accordingly */
+	        redisLog(REDIS_NOTICE,
+	            "Successful partial resynchronization with master.");
+	        sdsfree(reply);
+	        replicationResurrectCachedMaster(fd);
+	        return PSYNC_CONTINUE;
+	    }
+	
+	    /* If we reach this point we receied either an error since the master does
+	     * not understand PSYNC, or an unexpected reply from the master.
+	     * Return PSYNC_NOT_SUPPORTED to the caller in both cases. */
+	    // master不支持增量同步或者发送了其他错误
+	    if (strncmp(reply,"-ERR",4)) {
+	        /* If it's not an error, log the unexpected event. */
+	        redisLog(REDIS_WARNING,
+	            "Unexpected reply to PSYNC from master: %s", reply);
+	    } else {
+	        redisLog(REDIS_NOTICE,
+	            "Master does not support PSYNC or is in "
+	            "error state (reply: %s)", reply);
+	    }
+	    sdsfree(reply);
+	    replicationDiscardCachedMaster();
+	    return PSYNC_NOT_SUPPORTED;
 	}
 
 </font>
