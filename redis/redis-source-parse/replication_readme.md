@@ -346,10 +346,306 @@
 
 </font>
 
+###1.3 启动server ###
 
-###1.3 检查内存###
+####1.3.1 监听端口 ####
 
-####1.3.1 检查overcommit_memory ####
+<font color=green>
+
+	static int anetListen(char *err, int s, struct sockaddr *sa, socklen_t len, int backlog) {
+	    if (bind(s,sa,len) == -1) {
+	        anetSetError(err, "bind: %s", strerror(errno));
+	        close(s);
+	        return ANET_ERR;
+	    }
+	
+	    if (listen(s, backlog) == -1) {
+	        anetSetError(err, "listen: %s", strerror(errno));
+	        close(s);
+	        return ANET_ERR;
+	    }
+	    return ANET_OK;
+	}
+	
+	static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backlog)
+	{
+	    int s, rv;
+	    char _port[6];  /* strlen("65535") */
+	    struct addrinfo hints, *servinfo, *p;
+	
+	    snprintf(_port,6,"%d",port);
+	    memset(&hints,0,sizeof(hints));
+	    hints.ai_family = af;
+	    hints.ai_socktype = SOCK_STREAM;
+	    hints.ai_flags = AI_PASSIVE;    /* No effect if bindaddr != NULL */
+	
+	    if ((rv = getaddrinfo(bindaddr,_port,&hints,&servinfo)) != 0) {
+	        anetSetError(err, "%s", gai_strerror(rv));
+	        return ANET_ERR;
+	    }
+	    for (p = servinfo; p != NULL; p = p->ai_next) {
+	        if ((s = socket(p->ai_family,p->ai_socktype,p->ai_protocol)) == -1)
+	            continue;
+	        
+	        if (af == AF_INET6 && anetV6Only(err,s) == ANET_ERR) goto error;
+	        if (anetSetReuseAddr(err,s) == ANET_ERR) goto error;
+	        if (anetListen(err,s,p->ai_addr,p->ai_addrlen,backlog) == ANET_ERR) goto error;
+	        goto end;
+	    }
+	    if (p == NULL) {
+	        anetSetError(err, "unable to bind socket");
+	        goto error;
+	    }
+	
+	error:
+	    s = ANET_ERR;
+	end:
+	    freeaddrinfo(servinfo);
+	    return s;
+	}
+	
+	int anetTcpServer(char *err, int port, char *bindaddr, int backlog)
+	{
+	    return _anetTcpServer(err, port, bindaddr, AF_INET, backlog);
+	}
+	
+	int listenToPort(int port, int *fds, int *count) {
+	    int j;
+	
+	    /* Force binding of 0.0.0.0 if no bind address is specified, always
+	     * entering the loop if j == 0. */
+	    if (server.bindaddr_count == 0) server.bindaddr[0] = NULL;
+	    for (j = 0; j < server.bindaddr_count || j == 0; j++) {
+	        if (server.bindaddr[j] == NULL) {
+	            /* Bind * for both IPv6 and IPv4, we enter here only if
+	             * server.bindaddr_count == 0. */
+	            fds[*count] = anetTcp6Server(server.neterr,port,NULL,
+	                server.tcp_backlog);
+	            if (fds[*count] != ANET_ERR) {
+	                anetNonBlock(NULL,fds[*count]);
+	                (*count)++;
+	            }
+	            fds[*count] = anetTcpServer(server.neterr,port,NULL,
+	                server.tcp_backlog);
+	            if (fds[*count] != ANET_ERR) {
+	                anetNonBlock(NULL,fds[*count]);
+	                (*count)++;
+	            }
+	            /* Exit the loop if we were able to bind * on IPv4 or IPv6,
+	             * otherwise fds[*count] will be ANET_ERR and we'll print an
+	             * error and return to the caller with an error. */
+	            if (*count) break;
+	        } else if (strchr(server.bindaddr[j],':')) {
+	            /* Bind IPv6 address. */
+	            fds[*count] = anetTcp6Server(server.neterr,port,server.bindaddr[j],
+	                server.tcp_backlog);
+	        } else {
+	            /* Bind IPv4 address. */
+	            fds[*count] = anetTcpServer(server.neterr,port,server.bindaddr[j],
+				                server.tcp_backlog);
+	        }
+	        if (fds[*count] == ANET_ERR) {
+	            redisLog(REDIS_WARNING,
+	                "Creating Server TCP listening socket %s:%d: %s",
+	                server.bindaddr[j] ? server.bindaddr[j] : "*",
+	                port, server.neterr);
+	            return REDIS_ERR;
+	        }
+	        anetNonBlock(NULL,fds[*count]);
+	        (*count)++;
+	    }
+	    return REDIS_OK;
+	}
+	
+	void initServer(void) {
+	    /* Open the TCP listening socket for the user commands. */
+	    if (server.port != 0 &&
+	        listenToPort(server.port,server.ipfd,&server.ipfd_count) == REDIS_ERR)
+	        exit(1);
+		}
+	}
+
+</font>
+
+####1.3.2 注册接受外部链接的函数 ####
+
+<font color=green>
+	
+	void initServer(void) {
+		/* Create an event handler for accepting new connections in TCP and Unix
+	     * domain sockets. */
+	    for (j = 0; j < server.ipfd_count; j++) {
+	        if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
+	            acceptTcpHandler,NULL) == AE_ERR)
+	            {
+	                redisPanic(
+	                    "Unrecoverable error creating server.ipfd file event.");
+	            }
+	    }
+	}
+	
+</font>
+
+####1.3.3 接受外部连接，并创建对应的客户端 ####
+	
+####1.3.3.1 接受外部连接 ####
+
+<font color=green>
+	
+	static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *len) {
+	    int fd;
+	    while(1) {
+	        fd = accept(s,sa,len);
+	        if (fd == -1) {
+	            if (errno == EINTR)
+	                continue;
+	            else {
+	                anetSetError(err, "accept: %s", strerror(errno));
+	                return ANET_ERR;
+	            }
+	        }
+	        break;
+	    }
+	    return fd;
+	}
+
+	int anetTcpAccept(char *err, int s, char *ip, size_t ip_len, int *port) {
+	    int fd;
+	    struct sockaddr_storage sa;
+	    socklen_t salen = sizeof(sa);
+	    if ((fd = anetGenericAccept(err,s,(struct sockaddr*)&sa,&salen)) == -1)
+	        return ANET_ERR;
+	
+	    if (sa.ss_family == AF_INET) {
+	        struct sockaddr_in *s = (struct sockaddr_in *)&sa;
+	        if (ip) inet_ntop(AF_INET,(void*)&(s->sin_addr),ip,ip_len);
+	        if (port) *port = ntohs(s->sin_port);
+	    } else {
+	        struct sockaddr_in6 *s = (struct sockaddr_in6 *)&sa;
+	        if (ip) inet_ntop(AF_INET6,(void*)&(s->sin6_addr),ip,ip_len);
+	        if (port) *port = ntohs(s->sin6_port);
+	    }
+	    return fd;
+	}
+
+</font>
+
+####1.3.3.2 创建客户端 ####
+
+<font color=blue>
+ 
+>创建客户端后注册接受client的请求的回调函数readQueryFromClient，最后把客户端放入server的客户端集合:server.clients。
+>
+>如果client集合超限就给client返回err msg，然后再释放client句柄并关闭连接。
+
+</font>
+
+<font color=green>
+
+	redisClient *createClient(int fd) {
+	    redisClient *c = zmalloc(sizeof(redisClient));
+	
+	    /* passing -1 as fd it is possible to create a non connected client.
+	     * This is useful since all the Redis commands needs to be executed
+	     * in the context of a client. When commands are executed in other
+	     * contexts (for instance a Lua script) we need a non connected client. */
+	    if (fd != -1) {
+	        anetNonBlock(NULL,fd);
+			// 把fd设置为nodelay类型，有利于数据及时发送给客户端
+	        anetEnableTcpNoDelay(NULL,fd);
+	        if (server.tcpkeepalive)
+	            anetKeepAlive(NULL,fd,server.tcpkeepalive);
+		    // 注册接受客户端请求的函数
+	        if (aeCreateFileEvent(server.el,fd,AE_READABLE,
+	            readQueryFromClient, c) == AE_ERR)
+	        {
+	            close(fd);
+	            zfree(c);
+	            return NULL;
+	        }
+	    }
+		
+		// 把外部请求客户端放入客户端集合，即fake client是不会被放进去的
+	    if (fd != -1) listAddNodeTail(server.clients,c);
+	    initClientMultiState(c);
+	    return c;
+	}
+
+	#define MAX_ACCEPTS_PER_CALL 1000
+	static void acceptCommonHandler(int fd, int flags) {
+	    redisClient *c;
+	    if ((c = createClient(fd)) == NULL) {
+	        redisLog(REDIS_WARNING,
+	            "Error registering fd event for the new client: %s (fd=%d)",
+	            strerror(errno),fd);
+	        close(fd); /* May be already closed, just ignore errors */
+	        return;
+	    }
+	    /* If maxclient directive is set and this is one client more... close the
+	     * connection. Note that we create the client instead to check before
+	     * for this condition, since now the socket is already set in non-blocking
+	     * mode and we can send an error for free using the Kernel I/O */
+		// 如果连接过多[#define REDIS_MAX_CLIENTS 10000]，先给client发送一个error msg，
+		// 然后就把连接代表的client给free掉
+		//
+		// 这里解释了为何最后才检查超限的原因：需要给客户端发送error message，以让用户明白错误的原因。
+	    if (listLength(server.clients) > server.maxclients) {
+	        char *err = "-ERR max number of clients reached\r\n";
+	
+	        /* That's a best effort error message, don't check write errors */
+	        if (write(c->fd,err,strlen(err)) == -1) {
+	            /* Nothing to do, Just to avoid the warning... */
+	        }
+	        server.stat_rejected_conn++;
+	        freeClient(c);
+	        return;
+	    }
+	    server.stat_numconnections++;
+	    c->flags |= flags;
+	}
+			
+</font>
+	
+####1.3.3.3 在监听端口上接受请求并创建对应客户端的综合流程 ####
+
+<font color=blue>
+
+>目前逻辑步骤是：接受客户端的请求；创建对应的client句柄；插入client集合；检查client集合是否超限。
+>
+>那为什么不先检查server.clients的数目后直接把超限的连接请求给拒绝掉呢？
+>
+>acceptCommonHandler()函数里给出了一段解释：需要给客户端发送error message，以让用户明白错误的原因。
+
+</font>
+
+<font color=green>
+
+	// 接受外部请求，一次最多接受1000个请求
+	void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
+	    int cport, cfd, max = MAX_ACCEPTS_PER_CALL;
+	    char cip[REDIS_IP_STR_LEN];
+	    REDIS_NOTUSED(el);
+	    REDIS_NOTUSED(mask);
+	    REDIS_NOTUSED(privdata);
+	
+	    while(max--) {
+	        cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
+	        if (cfd == ANET_ERR) {
+	            if (errno != EWOULDBLOCK)
+	                redisLog(REDIS_WARNING,
+	                    "Accepting client connection: %s", server.neterr);
+	            return;
+	        }
+	        redisLog(REDIS_VERBOSE,"Accepted %s:%d", cip, cport);
+	        acceptCommonHandler(cfd,0);
+	    }
+	}
+
+</font>
+
+###1.4 检查内存###
+
+####1.4.1 检查overcommit_memory ####
 <font color=blue>
 
 overcommit_memory文件指定了内核针对内存分配的策略，overcommit_memory值可以是0、1、2。
@@ -378,7 +674,7 @@ overcommit_memory文件指定了内核针对内存分配的策略，overcommit_m
 
 </font>
 
-####1.3.2 检查Huge Page ####
+####1.4.2 检查Huge Page ####
 
 <font color=blue>
 
@@ -415,7 +711,7 @@ Transparent Huge Page用户合并物理内存的page
 
 </font>
 
-####1.3.3 综合流程 ####
+####1.4.3 综合流程 ####
 
 <font color=green>
 
@@ -430,7 +726,7 @@ Transparent Huge Page用户合并物理内存的page
 
 </font>
 
-###1.4 加载磁盘数据###
+###1.5 加载磁盘数据###
 
 <font color=green>
 
@@ -455,9 +751,9 @@ Transparent Huge Page用户合并物理内存的page
 
 </font>
 
-####1.4.1 加载aof文件 ####
+####1.5.1 加载aof文件 ####
 
-#####1.4.1.1 创建fake client#####
+#####1.5.1.1 创建fake client#####
 
 <font color=blue>
 
@@ -508,7 +804,7 @@ fake client用于aof模式下load aof文件的时候，重放客户端请求然�
 
 </font>
 
-#####1.4.1.2 加载aof文件，并重放相关的命令#####
+#####1.5.1.2 加载aof文件，并重放相关的命令#####
 
 <font color=green>
 
@@ -725,7 +1021,7 @@ fake client用于aof模式下load aof文件的时候，重放客户端请求然�
 
 </font>
 
-####1.4.2 加载rdb文件 ####
+####1.5.2 加载rdb文件 ####
 
 <font color=green>
 
@@ -854,7 +1150,7 @@ fake client用于aof模式下load aof文件的时候，重放客户端请求然�
 
 </font>
 
-###1.5 半道出家 ###
+###1.6 半道出家 ###
 
 <font color=blue>
 
@@ -1994,9 +2290,519 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 
 ##3 master流程##
 
-<font color=blue>
+###3.1 接收外部请求数据 ###
 
-master收到slave的SYNC or PSYNC 请求后，才会与slave之间进行数据同步。除了数据同步外，master还要处理slave发来的PING命令，它每10秒还会向slave发送PING命令以及“空包弹”[内容仅为一字节长度的'\n']。
+<font color=green>
+
+	void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
+		redisClient *c = (redisClient*) privdata;
+		int nread, readlen;
+		size_t qblen;
+		REDIS_NOTUSED(el);
+		REDIS_NOTUSED(mask);
+
+		server.current_client = c;
+		readlen = REDIS_IOBUF_LEN;
+		/* If this is a multi bulk request, and we are processing a bulk reply
+		 * that is large enough, try to maximize the probability that the query
+		 * buffer contains exactly the SDS string representing the object, even
+		 * at the risk of requiring more read(2) calls. This way the function
+		 * processMultiBulkBuffer() can avoid copying buffers to create the
+		 * Redis Object representing the argument. */
+		if (c->reqtype == REDIS_REQ_MULTIBULK && c->multibulklen && c->bulklen != -1
+			&& c->bulklen >= REDIS_MBULK_BIG_ARG)
+		{
+			int remaining = (unsigned)(c->bulklen+2)-sdslen(c->querybuf);
+
+			if (remaining < readlen) readlen = remaining;
+		}
+
+		qblen = sdslen(c->querybuf);
+		if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
+		c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
+		nread = read(fd, c->querybuf+qblen, readlen);
+		if (nread == -1) {
+			if (errno == EAGAIN) {
+				nread = 0;
+			} else {
+				redisLog(REDIS_VERBOSE, "Reading from client: %s",strerror(errno));
+				freeClient(c);
+				return;
+			}
+		} else if (nread == 0) {
+			redisLog(REDIS_VERBOSE, "Client closed connection");
+			freeClient(c);
+			return;
+		}
+		if (nread) {
+			sdsIncrLen(c->querybuf,nread);
+			c->lastinteraction = server.unixtime;
+			if (c->flags & REDIS_MASTER) c->reploff += nread;
+			server.stat_net_input_bytes += nread;
+		} else {
+			server.current_client = NULL;
+			return;
+		}
+		if (sdslen(c->querybuf) > server.client_max_querybuf_len) {
+			sds ci = catClientInfoString(sdsempty(),c), bytes = sdsempty();
+
+			bytes = sdscatrepr(bytes,c->querybuf,64);
+			redisLog(REDIS_WARNING,"Closing client that reached max query buffer length: %s (qbuf initial bytes: %s)", ci, bytes);
+			sdsfree(ci);
+			sdsfree(bytes);
+			freeClient(c);
+			return;
+		}
+		processInputBuffer(c);
+		server.current_client = NULL;
+	}
+
+</font>
+
+###3.2 处理外部请求 ###
+
+<font color=green>
+
+	void processInputBuffer(redisClient *c) {
+	    /* Keep processing while there is something in the input buffer */
+	    while(sdslen(c->querybuf)) {
+	        /* Return if clients are paused. */
+	        if (!(c->flags & REDIS_SLAVE) && clientsArePaused()) return;
+	
+	        /* Immediately abort if the client is in the middle of something. */
+	        if (c->flags & REDIS_BLOCKED) return;
+	
+	        /* REDIS_CLOSE_AFTER_REPLY closes the connection once the reply is
+	         * written to the client. Make sure to not let the reply grow after
+	         * this flag has been set (i.e. don't process more commands). */
+	        if (c->flags & REDIS_CLOSE_AFTER_REPLY) return;
+	
+	        /* Determine request type when unknown. */
+	        if (!c->reqtype) {
+	            if (c->querybuf[0] == '*') {
+	                c->reqtype = REDIS_REQ_MULTIBULK;
+	            } else {
+	                c->reqtype = REDIS_REQ_INLINE;
+	            }
+	        }
+	
+	        if (c->reqtype == REDIS_REQ_INLINE) {
+	            if (processInlineBuffer(c) != REDIS_OK) break;
+	        } else if (c->reqtype == REDIS_REQ_MULTIBULK) {
+	            if (processMultibulkBuffer(c) != REDIS_OK) break;
+	        } else {
+	            redisPanic("Unknown request type");
+	        }
+	        /* Multibulk processing could see a <= 0 length. */
+	        if (c->argc == 0) {
+	            resetClient(c);
+	        } else {
+	            /* Only reset the client when the command was executed. */
+	            if (processCommand(c) == REDIS_OK)
+	                resetClient(c);
+	        }
+	    }
+	}
+	
+	int processCommand(redisClient *c) {
+	    /* The QUIT command is handled separately. Normal command procs will
+	     * go through checking for replication and QUIT will cause trouble
+	     * when FORCE_REPLICATION is enabled and would be implemented in
+	     * a regular command proc. */
+	    if (!strcasecmp(c->argv[0]->ptr,"quit")) {
+	        addReply(c,shared.ok);
+	        c->flags |= REDIS_CLOSE_AFTER_REPLY;
+	        return REDIS_ERR;
+	    }
+	
+	    /* Now lookup the command and check ASAP about trivial error conditions
+	     * such as wrong arity, bad command name and so forth. */
+	    c->cmd = c->lastcmd = lookupCommand(c->argv[0]->ptr);
+	    if (!c->cmd) {
+	        flagTransaction(c);
+	        addReplyErrorFormat(c,"unknown command '%s'",
+	            (char*)c->argv[0]->ptr);
+	        return REDIS_OK;
+	    } else if ((c->cmd->arity > 0 && c->cmd->arity != c->argc) ||
+	               (c->argc < -c->cmd->arity)) {
+	        flagTransaction(c);
+	        addReplyErrorFormat(c,"wrong number of arguments for '%s' command",
+	            c->cmd->name);
+	        return REDIS_OK;
+	    }
+	
+	    /* Check if the user is authenticated */
+	    if (server.requirepass && !c->authenticated && c->cmd->proc != authCommand)
+	    {
+	        flagTransaction(c);
+	        addReply(c,shared.noautherr);
+	        return REDIS_OK;
+	    }
+	
+	    /* Handle the maxmemory directive.
+	     *
+	     * First we try to free some memory if possible (if there are volatile
+	     * keys in the dataset). If there are not the only thing we can do
+	     * is returning an error. */
+	    if (server.maxmemory) {
+	        int retval = freeMemoryIfNeeded();
+	        if ((c->cmd->flags & REDIS_CMD_DENYOOM) && retval == REDIS_ERR) {
+	            flagTransaction(c);
+	            addReply(c, shared.oomerr);
+	            return REDIS_OK;
+	        }
+	    }
+	
+	    /* Don't accept write commands if there are problems persisting on disk
+	     * and if this is a master instance. */
+	    if (((server.stop_writes_on_bgsave_err &&
+	          server.saveparamslen > 0 &&
+	          server.lastbgsave_status == REDIS_ERR) ||
+	          server.aof_last_write_status == REDIS_ERR) &&
+	        server.masterhost == NULL &&
+	        (c->cmd->flags & REDIS_CMD_WRITE ||
+	         c->cmd->proc == pingCommand))
+	    {
+	        flagTransaction(c);
+	        if (server.aof_last_write_status == REDIS_OK)
+	            addReply(c, shared.bgsaveerr);
+	        else
+	            addReplySds(c,
+	                sdscatprintf(sdsempty(),
+	                "-MISCONF Errors writing to the AOF file: %s\r\n",
+	                strerror(server.aof_last_write_errno)));
+	        return REDIS_OK;
+	    }
+	
+	    /* Don't accept write commands if there are not enough good slaves and
+	     * user configured the min-slaves-to-write option. */
+	    if (server.masterhost == NULL &&
+	        server.repl_min_slaves_to_write &&
+	        server.repl_min_slaves_max_lag &&
+	        c->cmd->flags & REDIS_CMD_WRITE &&
+	        server.repl_good_slaves_count < server.repl_min_slaves_to_write)
+	    {
+	        flagTransaction(c);
+	        addReply(c, shared.noreplicaserr);
+	        return REDIS_OK;
+	    }
+	
+	    /* Don't accept write commands if this is a read only slave. But
+	     * accept write commands if this is our master. */
+	    if (server.masterhost && server.repl_slave_ro &&
+	        !(c->flags & REDIS_MASTER) &&
+	        c->cmd->flags & REDIS_CMD_WRITE)
+	    {
+	        addReply(c, shared.roslaveerr);
+	        return REDIS_OK;
+	    }
+	
+	    /* Only allow SUBSCRIBE and UNSUBSCRIBE in the context of Pub/Sub */
+	    if (c->flags & REDIS_PUBSUB &&
+	        c->cmd->proc != pingCommand &&
+	        c->cmd->proc != subscribeCommand &&
+	        c->cmd->proc != unsubscribeCommand &&
+	        c->cmd->proc != psubscribeCommand &&
+	        c->cmd->proc != punsubscribeCommand) {
+	        addReplyError(c,"only (P)SUBSCRIBE / (P)UNSUBSCRIBE / QUIT allowed in this context");
+	        return REDIS_OK;
+	    }
+	
+	    /* Only allow INFO and SLAVEOF when slave-serve-stale-data is no and
+	     * we are a slave with a broken link with master. */
+	    if (server.masterhost && server.repl_state != REDIS_REPL_CONNECTED &&
+	        server.repl_serve_stale_data == 0 &&
+	        !(c->cmd->flags & REDIS_CMD_STALE))
+	    {
+	        flagTransaction(c);
+	        addReply(c, shared.masterdownerr);
+	        return REDIS_OK;
+	    }
+	
+	    /* Loading DB? Return an error if the command has not the
+	     * REDIS_CMD_LOADING flag. */
+	    if (server.loading && !(c->cmd->flags & REDIS_CMD_LOADING)) {
+	        addReply(c, shared.loadingerr);
+	        return REDIS_OK;
+	    }
+	
+	    /* Lua script too slow? Only allow a limited number of commands. */
+	    if (server.lua_timedout &&
+	          c->cmd->proc != authCommand &&
+	          c->cmd->proc != replconfCommand &&
+	        !(c->cmd->proc == shutdownCommand &&
+	          c->argc == 2 &&
+	          tolower(((char*)c->argv[1]->ptr)[0]) == 'n') &&
+	        !(c->cmd->proc == scriptCommand &&
+	          c->argc == 2 &&
+	          tolower(((char*)c->argv[1]->ptr)[0]) == 'k'))
+	    {
+	        flagTransaction(c);
+	        addReply(c, shared.slowscripterr);
+	        return REDIS_OK;
+	    }
+	
+	    /* Exec the command */
+	    if (c->flags & REDIS_MULTI &&
+	        c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
+	        c->cmd->proc != multiCommand && c->cmd->proc != watchCommand)
+	    {
+	        queueMultiCommand(c);
+	        addReply(c,shared.queued);
+	    } else {
+	        call(c,REDIS_CALL_FULL);
+	        c->woff = server.master_repl_offset;
+	        if (listLength(server.ready_keys))
+	            handleClientsBlockedOnLists();
+	    }
+	    return REDIS_OK;
+	}
+	
+	/* Call() is the core of Redis execution of a command */
+	void call(redisClient *c, int flags) {
+	    long long dirty, start, duration;
+	    int client_old_flags = c->flags;
+	
+	    /* Sent the command to clients in MONITOR mode, only if the commands are
+	     * not generated from reading an AOF. */
+	    if (listLength(server.monitors) &&
+	        !server.loading &&
+	        !(c->cmd->flags & (REDIS_CMD_SKIP_MONITOR|REDIS_CMD_ADMIN)))
+	    {
+	        replicationFeedMonitors(c,server.monitors,c->db->id,c->argv,c->argc);
+	    }
+	
+	    /* Call the command. */
+	    c->flags &= ~(REDIS_FORCE_AOF|REDIS_FORCE_REPL);
+	    redisOpArrayInit(&server.also_propagate);
+	    dirty = server.dirty;
+	    start = ustime();
+	    c->cmd->proc(c);
+	    duration = ustime()-start;
+	    dirty = server.dirty-dirty;
+	    if (dirty < 0) dirty = 0;
+	
+	    /* When EVAL is called loading the AOF we don't want commands called
+	     * from Lua to go into the slowlog or to populate statistics. */
+	    if (server.loading && c->flags & REDIS_LUA_CLIENT)
+	        flags &= ~(REDIS_CALL_SLOWLOG | REDIS_CALL_STATS);
+	
+	    /* If the caller is Lua, we want to force the EVAL caller to propagate
+	     * the script if the command flag or client flag are forcing the
+	     * propagation. */
+	    if (c->flags & REDIS_LUA_CLIENT && server.lua_caller) {
+	        if (c->flags & REDIS_FORCE_REPL)
+	            server.lua_caller->flags |= REDIS_FORCE_REPL;
+	        if (c->flags & REDIS_FORCE_AOF)
+	            server.lua_caller->flags |= REDIS_FORCE_AOF;
+	    }
+	
+	    /* Log the command into the Slow log if needed, and populate the
+	     * per-command statistics that we show in INFO commandstats. */
+	    if (flags & REDIS_CALL_SLOWLOG && c->cmd->proc != execCommand) {
+	        char *latency_event = (c->cmd->flags & REDIS_CMD_FAST) ?
+	                              "fast-command" : "command";
+	        latencyAddSampleIfNeeded(latency_event,duration/1000);
+	        slowlogPushEntryIfNeeded(c->argv,c->argc,duration);
+	    }
+	    if (flags & REDIS_CALL_STATS) {
+	        c->cmd->microseconds += duration;
+	        c->cmd->calls++;
+	    }
+	
+	    /* Propagate the command into the AOF and replication link */
+	    if (flags & REDIS_CALL_PROPAGATE) {
+	        int flags = REDIS_PROPAGATE_NONE;
+	
+	        if (c->flags & REDIS_FORCE_REPL) flags |= REDIS_PROPAGATE_REPL;
+	        if (c->flags & REDIS_FORCE_AOF) flags |= REDIS_PROPAGATE_AOF;
+	        if (dirty)
+	            flags |= (REDIS_PROPAGATE_REPL | REDIS_PROPAGATE_AOF);
+	        if (flags != REDIS_PROPAGATE_NONE)
+	            propagate(c->cmd,c->db->id,c->argv,c->argc,flags);
+	    }
+	
+	    /* Restore the old FORCE_AOF/REPL flags, since call can be executed
+	     * recursively. */
+	    c->flags &= ~(REDIS_FORCE_AOF|REDIS_FORCE_REPL);
+	    c->flags |= client_old_flags & (REDIS_FORCE_AOF|REDIS_FORCE_REPL);
+	
+	    /* Handle the alsoPropagate() API to handle commands that want to propagate
+	     * multiple separated commands. */
+	    if (server.also_propagate.numops) {
+	        int j;
+	        redisOp *rop;
+	
+	        for (j = 0; j < server.also_propagate.numops; j++) {
+	            rop = &server.also_propagate.ops[j];
+	            propagate(rop->cmd, rop->dbid, rop->argv, rop->argc, rop->target);
+	        }
+	        redisOpArrayFree(&server.also_propagate);
+	    }
+	    server.stat_numcommands++;
+	}
+	
+	/* Propagate the specified command (in the context of the specified database id)
+	 * to AOF and Slaves.
+	 *
+	 * flags are an xor between:
+	 * + REDIS_PROPAGATE_NONE (no propagation of command at all)
+	 * + REDIS_PROPAGATE_AOF (propagate into the AOF file if is enabled)
+	 * + REDIS_PROPAGATE_REPL (propagate into the replication link)
+	 */
+	void propagate(struct redisCommand *cmd, int dbid, robj **argv, int argc,
+	               int flags)
+	{
+	    if (server.aof_state != REDIS_AOF_OFF && flags & REDIS_PROPAGATE_AOF)
+	        feedAppendOnlyFile(cmd,dbid,argv,argc);
+	    if (flags & REDIS_PROPAGATE_REPL)
+	        replicationFeedSlaves(server.slaves,dbid,argv,argc);
+	}
+	
+	
+	
+	
+	
+	
+	/* Add data to the replication backlog.
+	 * This function also increments the global replication offset stored at
+	 * server.master_repl_offset, because there is no case where we want to feed
+	 * the backlog without incrementing the buffer. */
+	void feedReplicationBacklog(void *ptr, size_t len) {
+	    unsigned char *p = ptr;
+	
+	    server.master_repl_offset += len;
+	
+	    /* This is a circular buffer, so write as much data we can at every
+	     * iteration and rewind the "idx" index if we reach the limit. */
+	    while(len) {
+	        size_t thislen = server.repl_backlog_size - server.repl_backlog_idx;
+	        if (thislen > len) thislen = len;
+	        memcpy(server.repl_backlog+server.repl_backlog_idx,p,thislen);
+	        server.repl_backlog_idx += thislen;
+	        if (server.repl_backlog_idx == server.repl_backlog_size)
+	            server.repl_backlog_idx = 0;
+	        len -= thislen;
+	        p += thislen;
+	        server.repl_backlog_histlen += thislen;
+	    }
+	    if (server.repl_backlog_histlen > server.repl_backlog_size)
+	        server.repl_backlog_histlen = server.repl_backlog_size;
+	    /* Set the offset of the first byte we have in the backlog. */
+	    server.repl_backlog_off = server.master_repl_offset - 
+	                              server.repl_backlog_histlen + 1;
+	}   
+	
+	/* Wrapper for feedReplicationBacklog() that takes Redis string objects
+	 * as input. */
+	void feedReplicationBacklogWithObject(robj *o) {
+	    char llstr[REDIS_LONGSTR_SIZE];
+	    void *p;
+	    size_t len;
+	
+	    if (o->encoding == REDIS_ENCODING_INT) {
+	        len = ll2string(llstr,sizeof(llstr),(long)o->ptr);
+	        p = llstr;
+	    } else {
+	        len = sdslen(o->ptr);
+	        p = o->ptr;
+	    }
+	    feedReplicationBacklog(p,len);
+	}
+	
+	void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
+	    listNode *ln;
+	    listIter li;
+	    int j, len;
+	    char llstr[REDIS_LONGSTR_SIZE];
+	
+	    /* If there aren't slaves, and there is no backlog buffer to populate,
+	     * we can return ASAP. */
+	    if (server.repl_backlog == NULL && listLength(slaves) == 0) return;
+	
+	    /* We can't have slaves attached and no backlog. */
+	    redisAssert(!(listLength(slaves) != 0 && server.repl_backlog == NULL));
+	
+	    /* Send SELECT command to every slave if needed. */
+	    if (server.slaveseldb != dictid) {
+	        robj *selectcmd;
+	
+	        /* For a few DBs we have pre-computed SELECT command. */
+	        if (dictid >= 0 && dictid < REDIS_SHARED_SELECT_CMDS) {
+	            selectcmd = shared.select[dictid];
+	        } else {
+	            int dictid_len;
+	
+	            dictid_len = ll2string(llstr,sizeof(llstr),dictid);
+	            selectcmd = createObject(REDIS_STRING,
+	                sdscatprintf(sdsempty(),
+	                "*2\r\n$6\r\nSELECT\r\n$%d\r\n%s\r\n",
+	                dictid_len, llstr));
+	        }
+	
+	        /* Add the SELECT command into the backlog. */
+	        if (server.repl_backlog) feedReplicationBacklogWithObject(selectcmd);
+	
+	        /* Send it to slaves. */
+	        listRewind(slaves,&li);
+	        while((ln = listNext(&li))) {
+	            redisClient *slave = ln->value;
+	            addReply(slave,selectcmd);
+	        }
+	
+	        if (dictid < 0 || dictid >= REDIS_SHARED_SELECT_CMDS)
+	            decrRefCount(selectcmd);
+	    }
+	    server.slaveseldb = dictid;
+	
+	    /* Write the command to the replication backlog if any. */
+	    if (server.repl_backlog) {
+	        char aux[REDIS_LONGSTR_SIZE+3];
+	
+	        /* Add the multi bulk reply length. */
+	        aux[0] = '*';
+	        len = ll2string(aux+1,sizeof(aux)-1,argc);
+	        aux[len+1] = '\r';
+	        aux[len+2] = '\n';
+	        feedReplicationBacklog(aux,len+3);
+	
+	        for (j = 0; j < argc; j++) {
+	            long objlen = stringObjectLen(argv[j]);
+	
+	            /* We need to feed the buffer with the object as a bulk reply
+	             * not just as a plain string, so create the $..CRLF payload len
+	             * and add the final CRLF */
+	            aux[0] = '$';
+	            len = ll2string(aux+1,sizeof(aux)-1,objlen);
+	            aux[len+1] = '\r';
+	            aux[len+2] = '\n';
+	            feedReplicationBacklog(aux,len+3);
+	            feedReplicationBacklogWithObject(argv[j]);
+	            feedReplicationBacklog(aux+len+1,2);
+	        }
+	    }
+	
+	    /* Write the command to every slave. */
+	    listRewind(server.slaves,&li);
+	    while((ln = listNext(&li))) {
+	        redisClient *slave = ln->value;
+	
+	        /* Don't feed slaves that are still waiting for BGSAVE to start */
+	        if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_START) continue;
+	
+	        /* Feed slaves that are waiting for the initial SYNC (so these commands
+	         * are queued in the output buffer until the initial SYNC completes),
+	         * or are already in sync with the master. */
+	
+	        /* Add the multi bulk length. */
+	        addReplyMultiBulkLen(slave,argc);
+	
+	        /* Finally any additional argument that was not stored inside the
+	         * static buffer if any (from j to argc). */
+	        for (j = 0; j < argc; j++)
+	            addReplyBulk(slave,argv[j]);
+	    }
+	}
 
 </font>
 
@@ -2035,6 +2841,12 @@ master收到slave的SYNC or PSYNC 请求后，才会与slave之间进行数据�
 </font>
 
 ###3.2 维持与client之间的连接 ###
+
+<font color=blue>
+
+master收到slave的SYNC or PSYNC 请求后，才会与slave之间进行数据同步。除了数据同步外，master还要处理slave发来的PING命令，它每10秒还会向slave发送PING命令以及“空包弹”[内容仅为一字节长度的'\n']。
+
+</font>
 
 <font color=green>
 	
