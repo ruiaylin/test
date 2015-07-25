@@ -666,7 +666,7 @@ fake client用于aof模式下load aof文件的时候，重放客户端请求然�
 
             /* Clean up. Command code may have changed argv/argc so we use the
              * argv/argc of the client instead of the local variables. */
-            // 释放深圳的argv资源
+            // 释放假连接的argv资源
             freeFakeClientArgv(fakeClient);
             if (server.aof_load_truncated) valid_up_to = ftello(fp);
         }
@@ -1142,7 +1142,7 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 
 </font>
 
-###2.4 接收PING响应并进行数据同步 ###
+###2.4 接收PING的响应PING 并进行数据同步 ###
 
 <font color=blue>
 
@@ -1189,8 +1189,8 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
              * Note that older versions of Redis replied with "operation not
              * permitted" instead of using a proper error code, so we test
              * both. */
-            // 检查回复内容，处理除却noauth之类的其他错误
-            if (buf[0] != '+' &&
+            // 检查回复+PONG内容，处理除却noauth之类的其他错误
+            if (buf[0] != '+' && // 回复内容不是"+PONG",这里只比较第一个字节
                 strncmp(buf,"-NOAUTH",7) != 0 &&
                 strncmp(buf,"-ERR operation not permitted",28) != 0)
             {
@@ -1996,9 +1996,45 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 
 <font color=blue>
 
-
+master收到slave的SYNC or PSYNC 请求后，才会与slave之间进行数据同步。除了数据同步外，master还要处理slave发来的PING命令，它每10秒还会向slave发送PING命令以及“空包弹”[内容仅为一字节长度的'\n']。
 
 </font>
+
+###3.1 处理PING请求 ###
+
+<font color=green>
+
+	/* The PING command. It works in a different way if the client is in
+	 * in Pub/Sub mode. */
+	// 如果client实在Pub/Sub模式下发来的PING请求，则回复"PONG argv[1]" or "PONG nil";
+	// 否则回复"argv[1]" or "PONG"
+	void pingCommand(redisClient *c) {
+	    /* The command takes zero or one arguments. */
+		// PING命令的参数不能超过一个
+	    if (c->argc > 2) {
+	        addReplyErrorFormat(c,"wrong number of arguments for '%s' command",
+	            c->cmd->name);
+	        return;
+	    }
+	
+	    if (c->flags & REDIS_PUBSUB) {
+	        addReply(c,shared.mbulkhdr[2]); // shared.mbulkhdr[2] = *2\r\n
+	        addReplyBulkCBuffer(c,"pong",4); // PONG
+	        if (c->argc == 1)
+	            addReplyBulkCBuffer(c,"",0);
+	        else
+	            addReplyBulk(c,c->argv[1]);
+	    } else {
+	        if (c->argc == 1)
+	            addReply(c,shared.pong);
+	        else
+	            addReplyBulk(c,c->argv[1]);
+	    }
+	}
+
+</font>
+
+###3.2 维持与client之间的连接 ###
 
 <font color=green>
 	
@@ -2108,6 +2144,28 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    }
 	}
 
+	/* Start a BGSAVE for replication goals, which is, selecting the disk or
+	 * socket target depending on the configuration, and making sure that
+	 * the script cache is flushed before to start.
+	 *
+	 * Returns REDIS_OK on success or REDIS_ERR otherwise. */
+	int startBgsaveForReplication(void) {
+	    int retval;
+	
+	    redisLog(REDIS_NOTICE,"Starting BGSAVE for SYNC with target: %s",
+	        server.repl_diskless_sync ? "slaves sockets" : "disk");
+	
+	    if (server.repl_diskless_sync)
+	        retval = rdbSaveToSlavesSockets();
+	    else
+	        retval = rdbSaveBackground(server.rdb_filename);
+	
+	    /* Flush the script cache, since we need that slave differences are
+	     * accumulated without requiring slaves to match our cached scripts. */
+	    if (retval == REDIS_OK) replicationScriptCacheFlush();
+	    return retval;
+	}
+
 	/* Replication cron function, called 1 time per second. */
 	void replicationCron(void) {
 	    /* If we have attached slaves, PING them from time to time.
@@ -2131,6 +2189,17 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	         * stage, that is, slaves waiting for the master to create the RDB file.
 	         * The newline will be ignored by the slave but will refresh the
 	         * last-io timer preventing a timeout. */
+			// 除了发送PING命令，还要发送一字节内容为"\n"给slave。slave此时可能一直在
+			// 等待master创建rdb文件，等待master发来的数据，master给slave发送的这个一
+			// 字节长度的内容会被忽略，但是slave会更新repl_transfer_lastio字段值，这样
+			// 可以防止连接超时。
+			//
+			// 可以参考/** 2.2 断开与master之间的连接 **/，slave模式下的replicationCron
+			// 会断开与master之间的超时连接
+			//
+			// 至于slave怎么处理这个接收到的内容，请参考/** 2.5 全量同步 **/一节关于
+			// 函数readSyncBulkPayload()的详细说明，由于发送出去的是"\n"，slave接收
+			// 的时候把"\n"过滤掉了，所以其判定条件是:buf[0] == '\0'
 	        listRewind(server.slaves,&li);
 	        while((ln = listNext(&li))) {
 	            redisClient *slave = ln->value;
@@ -2147,6 +2216,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    }
 	
 	    /* Disconnect timedout slaves. */
+		// 关闭超时的连接
 	    if (listLength(server.slaves)) {
 	        listIter li;
 	        listNode *ln;
@@ -2168,6 +2238,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	
 	    /* If we have no attached slaves and there is a replication backlog
 	     * using memory, free it after some (configured) time. */
+		// 没有slave，则释放backlog 
 	    if (listLength(server.slaves) == 0 && server.repl_backlog_time_limit &&
 	        server.repl_backlog)
 	    {
@@ -2185,6 +2256,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    /* If AOF is disabled and we no longer have attached slaves, we can
 	     * free our Replication Script Cache as there is no need to propagate
 	     * EVALSHA at all. */
+		// 如果没有slave且AOF被禁止，则释放Replication Script Cache
 	    if (listLength(server.slaves) == 0 &&
 	        server.aof_state == REDIS_AOF_OFF &&
 	        listLength(server.repl_scriptcache_fifo) != 0)
@@ -2199,6 +2271,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	     * This code is also useful to trigger a BGSAVE if the diskless
 	     * replication was turned off with CONFIG SET, while there were already
 	     * slaves in WAIT_BGSAVE_START state. */
+		// 如果自身没有起用磁盘存储，则把内存数据发送给slave
 	    if (server.rdb_child_pid == -1 && server.aof_child_pid == -1) {
 	        time_t idle, max_idle = 0;
 	        int slaves_waiting = 0;
@@ -2235,6 +2308,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    }
 	
 	    /* Refresh the number of slaves with lag <= min-slaves-max-lag. */
+		// 更新有效的slave数目
 	    refreshGoodSlavesCount();
 	}
 
