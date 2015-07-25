@@ -1438,7 +1438,7 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
          * a FULL resync using the PSYNC command we'll set the offset at the
          * right value, so that this information will be propagated to the
          * client structure representing the master into server.master. */
-        // 把repl_master_initial_offset以说明master run_id和offset无效
+        // 把repl_master_initial_offset赋值为-1，以说明master run_id和offset无效
         server.repl_master_initial_offset = -1;
 
         // 把自己记录的server runid和offset发送给master
@@ -1534,8 +1534,8 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 - 1 确定数据长度和数据读取模式[精确 & 模糊];
 - 2 读取数据；
 - 3 write & sync至磁盘；
-- 4 读取完毕，修改tmp file为正式文件名称，把数据load到内存;
-- 5 依据repl_transfer_s创建client，并修改状态为CONNECTED；
+- 4 读取完毕，修改tmp file为正式文件名称，清空内存中的数据，把数据load到内存;
+- 5 依据repl_transfer_s创建一个client：server.master，并修改状态为CONNECTED；
 - 6 启动aof模式。
 
 </font>
@@ -1715,6 +1715,7 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 	        }
 	        redisLog(REDIS_NOTICE, "MASTER <-> SLAVE sync: Flushing old data");
 	        signalFlushedDb(-1);
+			// load到内存之前，先把内存数据清空
 	        emptyDb(replicationEmptyDbCallback);
 	        /* Before loading the DB into memory we need to delete the readable
 	         * handler, otherwise it will get called recursively since
@@ -1736,6 +1737,7 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 	        server.master->flags |= REDIS_MASTER;
 	        server.master->authenticated = 1;
 	        server.repl_state = REDIS_REPL_CONNECTED;
+			// 在slaveTryPartialResynchronization中可以获取下面两个值
 	        server.master->reploff = server.repl_master_initial_offset;
 	        memcpy(server.master->replrunid, server.repl_master_runid,
 	            sizeof(server.repl_master_runid));
@@ -1841,6 +1843,24 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
 	    printf("readQueryFromClient call processInlineBuffer over\n");
 	    server.current_client = NULL;
 	}
+
+</font>
+
+###2.7 server.cached_master与server.master ###
+
+<font color=blue>
+
+>server.master代表slave与master之间的连接句柄，当这个连接超时后连接会被关闭，但是句柄这个连接所用到的内存资源会被赋值给server.cached_master。待需要重新与master建立连接的时候，server.master只需要从server.cached_master处获取到这个句柄就可以了。
+>
+>通过二者实现了slave与master之间连接句柄的循环利用。cached_master可以认为是一个“迷你型”的资源回收池。
+
+</font>
+
+###2.7.1 创建连接句柄 ###
+
+<font color=blue>
+
+
 
 </font>
 
