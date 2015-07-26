@@ -2317,6 +2317,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 			if (remaining < readlen) readlen = remaining;
 		}
 
+		// 创建buffer，并读取请求数据 
 		qblen = sdslen(c->querybuf);
 		if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
 		c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
@@ -2353,6 +2354,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 			freeClient(c);
 			return;
 		}
+		// 处理收到的buffer
 		processInputBuffer(c);
 		server.current_client = NULL;
 	}
@@ -2364,19 +2366,9 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 <font color=green>
 
 	void processInputBuffer(redisClient *c) {
+		// 循环处理收到的一批命令 
 	    /* Keep processing while there is something in the input buffer */
 	    while(sdslen(c->querybuf)) {
-	        /* Return if clients are paused. */
-	        if (!(c->flags & REDIS_SLAVE) && clientsArePaused()) return;
-	
-	        /* Immediately abort if the client is in the middle of something. */
-	        if (c->flags & REDIS_BLOCKED) return;
-	
-	        /* REDIS_CLOSE_AFTER_REPLY closes the connection once the reply is
-	         * written to the client. Make sure to not let the reply grow after
-	         * this flag has been set (i.e. don't process more commands). */
-	        if (c->flags & REDIS_CLOSE_AFTER_REPLY) return;
-	
 	        /* Determine request type when unknown. */
 	        if (!c->reqtype) {
 	            if (c->querybuf[0] == '*') {
@@ -2398,17 +2390,119 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	            resetClient(c);
 	        } else {
 	            /* Only reset the client when the command was executed. */
+				// 执行命令
 	            if (processCommand(c) == REDIS_OK)
 	                resetClient(c);
 	        }
 	    }
 	}
+
+</font>
+
+####3.2.1 分析请求数据流 ####
+
+<font color=blue>
+
+>把收到的字符流按照redis protocol处理成redis能够理解的数据，即把数据由“泥巴”初步的加工成“砖坯”。
+>
+>还有一个同类函数是processMultibulkBuffer()。
+
+</font>
+
+<font color=green>
+
+	int processInlineBuffer(redisClient *c) {
+	    char *newline;
+	    int argc, j;
+	    sds *argv, aux;
+	    size_t querylen;
+	
+	    /* Search for end of line */
+	    newline = strchr(c->querybuf,'\n');
+	
+	    /* Nothing to do without a \r\n */
+	    if (newline == NULL) {
+	        if (sdslen(c->querybuf) > REDIS_INLINE_MAX_SIZE) {
+	            addReplyError(c,"Protocol error: too big inline request");
+	            setProtocolError(c,0);
+	        }
+	        return REDIS_ERR;
+	    }
+	
+	    /* Handle the \r\n case. */
+	    if (newline && newline != c->querybuf && *(newline-1) == '\r')
+	        newline--;
+	
+	    /* Split the input buffer up to the \r\n */
+	    querylen = newline-(c->querybuf);
+	    aux = sdsnewlen(c->querybuf,querylen);
+	    argv = sdssplitargs(aux,&argc);
+	    sdsfree(aux);
+	    if (argv == NULL) {
+	        addReplyError(c,"Protocol error: unbalanced quotes in request");
+	        setProtocolError(c,0);
+	        return REDIS_ERR;
+	    }
+	
+	    /* Newline from slaves can be used to refresh the last ACK time.
+	     * This is useful for a slave to ping back while loading a big
+	     * RDB file. */
+	    if (querylen == 0 && c->flags & REDIS_SLAVE)
+	        c->repl_ack_time = server.unixtime;
+	
+	    /* Leave data after the first line of the query in the buffer */
+	    sdsrange(c->querybuf,querylen+2,-1);
+	
+	    /* Setup argv array on client structure */
+	    if (argc) {
+	        if (c->argv) zfree(c->argv);
+	        c->argv = zmalloc(sizeof(robj*)*argc);
+	    }
+	
+	    /* Create redis objects for all arguments. */
+	    for (c->argc = 0, j = 0; j < argc; j++) {
+	        if (sdslen(argv[j])) {
+	            c->argv[c->argc] = createObject(REDIS_STRING,argv[j]);
+	            c->argc++;
+	        } else {
+	            sdsfree(argv[j]);
+	        }
+	    }
+	    zfree(argv);
+	    return REDIS_OK;
+	}
+
+</font>
+	
+####3.2.2 执行请求命令 ####
+
+<font color=blue>
+
+处理命令的前期核验流程：
+
+- 1 收到quit命令，处理完收尾工作[如把replication工作]后退出；
+- 2 从命令词典查找出请求的请求，如果命令不存在或者参数不正确则退出；
+- 3 验证用户是否合法；
+- 4	如果server的内存已经满溢，则要进行数据淘汰；
+- 5 如果master在序列化数据的时候出错，就不要再处理写请求；
+- 6 如果处于正常态的slave的数目少于用于要求的"min-slaves-to-write"，拒绝写请求；
+- 7 如果是slave而且是readonly类型，拒绝写请求；
+- 8 Pub/Sub模式下只处理这种类型的命令[ping & subscribe & unsubscribe & psubscribe & punsubscribe]；
+- 9 如果是slave且与master的连接有问题而且"slave-serve-stale-data"是no，则只处理INFO和SLAVEOF命令；
+- 10 如果server正在加载数据而命令是加载数据其间不能处理的，则拒绝处理；
+- 11 如果处理script脚本已经超时，则只能处理auth、replconf和shutdown之类的命令；
+- 12 执行命令，如果是事务命令则排队执行，否则条用call函数处理命令。
+	
+</font>
+
+<font color=green>
 	
 	int processCommand(redisClient *c) {
 	    /* The QUIT command is handled separately. Normal command procs will
 	     * go through checking for replication and QUIT will cause trouble
 	     * when FORCE_REPLICATION is enabled and would be implemented in
 	     * a regular command proc. */
+		// 单独处理quit命令，此时应该处理完收尾工作[如把replication工作]再退出
 	    if (!strcasecmp(c->argv[0]->ptr,"quit")) {
 	        addReply(c,shared.ok);
 	        c->flags |= REDIS_CLOSE_AFTER_REPLY;
@@ -2417,14 +2511,17 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	
 	    /* Now lookup the command and check ASAP about trivial error conditions
 	     * such as wrong arity, bad command name and so forth. */
+		// 从命令词典查找出请求的请求
 	    c->cmd = c->lastcmd = lookupCommand(c->argv[0]->ptr);
 	    if (!c->cmd) {
+			// 命令不存在
 	        flagTransaction(c);
 	        addReplyErrorFormat(c,"unknown command '%s'",
 	            (char*)c->argv[0]->ptr);
 	        return REDIS_OK;
 	    } else if ((c->cmd->arity > 0 && c->cmd->arity != c->argc) ||
 	               (c->argc < -c->cmd->arity)) {
+			// 参数数目不正确
 	        flagTransaction(c);
 	        addReplyErrorFormat(c,"wrong number of arguments for '%s' command",
 	            c->cmd->name);
@@ -2432,6 +2529,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    }
 	
 	    /* Check if the user is authenticated */
+		// 验证用户是否合法
 	    if (server.requirepass && !c->authenticated && c->cmd->proc != authCommand)
 	    {
 	        flagTransaction(c);
@@ -2444,6 +2542,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	     * First we try to free some memory if possible (if there are volatile
 	     * keys in the dataset). If there are not the only thing we can do
 	     * is returning an error. */
+		// 如果server的内存已经满溢，则要进行数据淘汰
 	    if (server.maxmemory) {
 	        int retval = freeMemoryIfNeeded();
 	        if ((c->cmd->flags & REDIS_CMD_DENYOOM) && retval == REDIS_ERR) {
@@ -2455,6 +2554,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	
 	    /* Don't accept write commands if there are problems persisting on disk
 	     * and if this is a master instance. */
+		// 如果master在序列化数据的时候出错，就不要再处理写请求
 	    if (((server.stop_writes_on_bgsave_err &&
 	          server.saveparamslen > 0 &&
 	          server.lastbgsave_status == REDIS_ERR) ||
@@ -2476,6 +2576,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	
 	    /* Don't accept write commands if there are not enough good slaves and
 	     * user configured the min-slaves-to-write option. */
+		// 如果处于正常态的slave的数目少于用于要求的"min-slaves-to-write"，拒绝写请求
 	    if (server.masterhost == NULL &&
 	        server.repl_min_slaves_to_write &&
 	        server.repl_min_slaves_max_lag &&
@@ -2489,6 +2590,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	
 	    /* Don't accept write commands if this is a read only slave. But
 	     * accept write commands if this is our master. */
+		// 如果是slave而且是readonly类型，拒绝写请求
 	    if (server.masterhost && server.repl_slave_ro &&
 	        !(c->flags & REDIS_MASTER) &&
 	        c->cmd->flags & REDIS_CMD_WRITE)
@@ -2498,6 +2600,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    }
 	
 	    /* Only allow SUBSCRIBE and UNSUBSCRIBE in the context of Pub/Sub */
+		// Pub/Sub模式下只处理这种类型的命令[ping & subscribe & unsubscribe & psubscribe & punsubscribe]
 	    if (c->flags & REDIS_PUBSUB &&
 	        c->cmd->proc != pingCommand &&
 	        c->cmd->proc != subscribeCommand &&
@@ -2510,6 +2613,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	
 	    /* Only allow INFO and SLAVEOF when slave-serve-stale-data is no and
 	     * we are a slave with a broken link with master. */
+		// 如果是slave且与master的连接有问题而且"slave-serve-stale-data"是no，则只处理INFO和SLAVEOF命令
 	    if (server.masterhost && server.repl_state != REDIS_REPL_CONNECTED &&
 	        server.repl_serve_stale_data == 0 &&
 	        !(c->cmd->flags & REDIS_CMD_STALE))
@@ -2521,12 +2625,14 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	
 	    /* Loading DB? Return an error if the command has not the
 	     * REDIS_CMD_LOADING flag. */
+		// 如果server正在加载数据而命令是加载数据其间不能处理的，则拒绝处理
 	    if (server.loading && !(c->cmd->flags & REDIS_CMD_LOADING)) {
 	        addReply(c, shared.loadingerr);
 	        return REDIS_OK;
 	    }
 	
 	    /* Lua script too slow? Only allow a limited number of commands. */
+		// 如果处理script脚本已经超时，则只能处理auth、replconf和shutdown之类的命令
 	    if (server.lua_timedout &&
 	          c->cmd->proc != authCommand &&
 	          c->cmd->proc != replconfCommand &&
@@ -2543,13 +2649,16 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    }
 	
 	    /* Exec the command */
+		// 执行命令
 	    if (c->flags & REDIS_MULTI &&
 	        c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
 	        c->cmd->proc != multiCommand && c->cmd->proc != watchCommand)
 	    {
+			// 如果命令是事务命令，则排队等待执行
 	        queueMultiCommand(c);
 	        addReply(c,shared.queued);
 	    } else {
+			// 立即执行命令
 	        call(c,REDIS_CALL_FULL);
 	        c->woff = server.master_repl_offset;
 	        if (listLength(server.ready_keys))
@@ -2557,60 +2666,38 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    }
 	    return REDIS_OK;
 	}
+
+</font>
 	
+####3.2.2.1 执行请求命令 ####
+
+<font color=blue>
+
+执行用户请求，并把内容序列化到磁盘、同步给slave。
+
+</font>
+
+<font color=green>
+
 	/* Call() is the core of Redis execution of a command */
+	// 处理redis命令的核心函数
 	void call(redisClient *c, int flags) {
 	    long long dirty, start, duration;
 	    int client_old_flags = c->flags;
-	
-	    /* Sent the command to clients in MONITOR mode, only if the commands are
-	     * not generated from reading an AOF. */
-	    if (listLength(server.monitors) &&
-	        !server.loading &&
-	        !(c->cmd->flags & (REDIS_CMD_SKIP_MONITOR|REDIS_CMD_ADMIN)))
-	    {
-	        replicationFeedMonitors(c,server.monitors,c->db->id,c->argv,c->argc);
-	    }
-	
+
 	    /* Call the command. */
 	    c->flags &= ~(REDIS_FORCE_AOF|REDIS_FORCE_REPL);
 	    redisOpArrayInit(&server.also_propagate);
 	    dirty = server.dirty;
 	    start = ustime();
+		// 调用命令的执行函数
 	    c->cmd->proc(c);
 	    duration = ustime()-start;
 	    dirty = server.dirty-dirty;
 	    if (dirty < 0) dirty = 0;
-	
-	    /* When EVAL is called loading the AOF we don't want commands called
-	     * from Lua to go into the slowlog or to populate statistics. */
-	    if (server.loading && c->flags & REDIS_LUA_CLIENT)
-	        flags &= ~(REDIS_CALL_SLOWLOG | REDIS_CALL_STATS);
-	
-	    /* If the caller is Lua, we want to force the EVAL caller to propagate
-	     * the script if the command flag or client flag are forcing the
-	     * propagation. */
-	    if (c->flags & REDIS_LUA_CLIENT && server.lua_caller) {
-	        if (c->flags & REDIS_FORCE_REPL)
-	            server.lua_caller->flags |= REDIS_FORCE_REPL;
-	        if (c->flags & REDIS_FORCE_AOF)
-	            server.lua_caller->flags |= REDIS_FORCE_AOF;
-	    }
-	
-	    /* Log the command into the Slow log if needed, and populate the
-	     * per-command statistics that we show in INFO commandstats. */
-	    if (flags & REDIS_CALL_SLOWLOG && c->cmd->proc != execCommand) {
-	        char *latency_event = (c->cmd->flags & REDIS_CMD_FAST) ?
-	                              "fast-command" : "command";
-	        latencyAddSampleIfNeeded(latency_event,duration/1000);
-	        slowlogPushEntryIfNeeded(c->argv,c->argc,duration);
-	    }
-	    if (flags & REDIS_CALL_STATS) {
-	        c->cmd->microseconds += duration;
-	        c->cmd->calls++;
-	    }
-	
+		
 	    /* Propagate the command into the AOF and replication link */
+		// 如果是需要replication的命令，就要放进backlog以同步给slaves
 	    if (flags & REDIS_CALL_PROPAGATE) {
 	        int flags = REDIS_PROPAGATE_NONE;
 	
@@ -2642,6 +2729,22 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    server.stat_numcommands++;
 	}
 	
+</font>
+
+#####3.2.2.1.1 同步数据至disk&slaves #####
+
+<font color=blue>
+
+同步数据流程：
+
+- 1 确定cmd所在的db，先附加select db命令至backlog buffer；
+- 2 把cmd以及其参数放进backlog buffer；
+- 3 把backlog buffer的内容发送给slaves。
+
+</font>
+
+<font color=green>
+	
 	/* Propagate the specified command (in the context of the specified database id)
 	 * to AOF and Slaves.
 	 *
@@ -2650,6 +2753,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	 * + REDIS_PROPAGATE_AOF (propagate into the AOF file if is enabled)
 	 * + REDIS_PROPAGATE_REPL (propagate into the replication link)
 	 */
+	// 把数据序列化到aof文件或者replicate给slaves
 	void propagate(struct redisCommand *cmd, int dbid, robj **argv, int argc,
 	               int flags)
 	{
@@ -2657,57 +2761,6 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	        feedAppendOnlyFile(cmd,dbid,argv,argc);
 	    if (flags & REDIS_PROPAGATE_REPL)
 	        replicationFeedSlaves(server.slaves,dbid,argv,argc);
-	}
-	
-	
-	
-	
-	
-	
-	/* Add data to the replication backlog.
-	 * This function also increments the global replication offset stored at
-	 * server.master_repl_offset, because there is no case where we want to feed
-	 * the backlog without incrementing the buffer. */
-	void feedReplicationBacklog(void *ptr, size_t len) {
-	    unsigned char *p = ptr;
-	
-	    server.master_repl_offset += len;
-	
-	    /* This is a circular buffer, so write as much data we can at every
-	     * iteration and rewind the "idx" index if we reach the limit. */
-	    while(len) {
-	        size_t thislen = server.repl_backlog_size - server.repl_backlog_idx;
-	        if (thislen > len) thislen = len;
-	        memcpy(server.repl_backlog+server.repl_backlog_idx,p,thislen);
-	        server.repl_backlog_idx += thislen;
-	        if (server.repl_backlog_idx == server.repl_backlog_size)
-	            server.repl_backlog_idx = 0;
-	        len -= thislen;
-	        p += thislen;
-	        server.repl_backlog_histlen += thislen;
-	    }
-	    if (server.repl_backlog_histlen > server.repl_backlog_size)
-	        server.repl_backlog_histlen = server.repl_backlog_size;
-	    /* Set the offset of the first byte we have in the backlog. */
-	    server.repl_backlog_off = server.master_repl_offset - 
-	                              server.repl_backlog_histlen + 1;
-	}   
-	
-	/* Wrapper for feedReplicationBacklog() that takes Redis string objects
-	 * as input. */
-	void feedReplicationBacklogWithObject(robj *o) {
-	    char llstr[REDIS_LONGSTR_SIZE];
-	    void *p;
-	    size_t len;
-	
-	    if (o->encoding == REDIS_ENCODING_INT) {
-	        len = ll2string(llstr,sizeof(llstr),(long)o->ptr);
-	        p = llstr;
-	    } else {
-	        len = sdslen(o->ptr);
-	        p = o->ptr;
-	    }
-	    feedReplicationBacklog(p,len);
 	}
 	
 	void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
@@ -2718,12 +2771,15 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	
 	    /* If there aren't slaves, and there is no backlog buffer to populate,
 	     * we can return ASAP. */
+		// 如果没有slaves而且backlog的buffer为空，则退出
 	    if (server.repl_backlog == NULL && listLength(slaves) == 0) return;
 	
 	    /* We can't have slaves attached and no backlog. */
+		// 这行代码显然多余了
 	    redisAssert(!(listLength(slaves) != 0 && server.repl_backlog == NULL));
 	
 	    /* Send SELECT command to every slave if needed. */
+		// 先附加select db命令
 	    if (server.slaveseldb != dictid) {
 	        robj *selectcmd;
 	
@@ -2756,6 +2812,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    server.slaveseldb = dictid;
 	
 	    /* Write the command to the replication backlog if any. */
+		// 把命令放进backlog buffer
 	    if (server.repl_backlog) {
 	        char aux[REDIS_LONGSTR_SIZE+3];
 	
@@ -2783,6 +2840,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    }
 	
 	    /* Write the command to every slave. */
+		// 把数据同步给slaves
 	    listRewind(server.slaves,&li);
 	    while((ln = listNext(&li))) {
 	        redisClient *slave = ln->value;
@@ -2806,7 +2864,77 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 
 </font>
 
-###3.1 处理PING请求 ###
+######3.2.2.1.1.1 把redis object放入backlog ######
+
+<font color=blue>
+
+backlog buffer[server.repl_backlog]可以认为是一种ring buffer，几个重要的成员意义如下：
+
+- server.repl_backlog_size    backlogf的总size；
+- server.repl_backlog_idx     write index；
+- server.repl_backlog_off     read index；
+- server.repl_backlog_histlen buffer中有效数据的size；
+- server.master_repl_offset   master的backlog总共收到的数据的size；
+- server.repl_backlog_off     master已经发送出去的数据的size；
+
+用户发送info replication命令给master的时候，可以看到master_repl_offset和repl_backlog_off。repl_backlog_off的值也只有收到新的写请求的时候才会被更新。
+
+</font>
+
+<font color=green>
+	
+	/* Wrapper for feedReplicationBacklog() that takes Redis string objects
+	 * as input. */
+	void feedReplicationBacklogWithObject(robj *o) {
+	    char llstr[REDIS_LONGSTR_SIZE];
+	    void *p;
+	    size_t len;
+	
+	    if (o->encoding == REDIS_ENCODING_INT) {
+	        len = ll2string(llstr,sizeof(llstr),(long)o->ptr);
+	        p = llstr;
+	    } else {
+	        len = sdslen(o->ptr);
+	        p = o->ptr;
+	    }
+	    feedReplicationBacklog(p,len);
+	}
+	
+	/* Add data to the replication backlog.
+	 * This function also increments the global replication offset stored at
+	 * server.master_repl_offset, because there is no case where we want to feed
+	 * the backlog without incrementing the buffer. */
+	void feedReplicationBacklog(void *ptr, size_t len) {
+		unsigned char *p = ptr;
+
+		// 记录master的backlog总共收到的数据的size
+		server.master_repl_offset += len;
+
+		/* This is a circular buffer, so write as much data we can at every
+		 * iteration and rewind the "idx" index if we reach the limit. */
+		// 直到数据完全写进backlog，才退出
+		while(len) {
+			size_t thislen = server.repl_backlog_size - server.repl_backlog_idx;
+			if (thislen > len) thislen = len;
+			memcpy(server.repl_backlog+server.repl_backlog_idx,p,thislen);
+			server.repl_backlog_idx += thislen;
+			if (server.repl_backlog_idx == server.repl_backlog_size)
+				server.repl_backlog_idx = 0;
+			len -= thislen;
+			p += thislen;
+			server.repl_backlog_histlen += thislen;
+		}
+		if (server.repl_backlog_histlen > server.repl_backlog_size)
+			server.repl_backlog_histlen = server.repl_backlog_size;
+		/* Set the offset of the first byte we have in the backlog. */
+		// 已经发送出去的数据的size
+		server.repl_backlog_off = server.master_repl_offset -
+								  server.repl_backlog_histlen + 1;
+	}
+
+</font>
+
+###3.3 处理PING请求 ###
 
 <font color=green>
 
@@ -2840,143 +2968,501 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 
 </font>
 
-###3.2 维持与client之间的连接 ###
+###3.4 处理REPLCONF命令 ###
 
 <font color=blue>
 
-master收到slave的SYNC or PSYNC 请求后，才会与slave之间进行数据同步。除了数据同步外，master还要处理slave发来的PING命令，它每10秒还会向slave发送PING命令以及“空包弹”[内容仅为一字节长度的'\n']。
+>客户端会在发起sync命令之前发送这个REPLCONF命令，以用于确认可以开始replication流程。
+>
+>目前slave仅仅用到了向master发送自己的listening port的功能，让master知道自己的监听端口，master在处理info命令时候就能告诉客户端自己的slave的监听端口。
+>
+>在将来的工作中，这个函数的其他功能会被调用，以方便增量同步。
 
 </font>
 
 <font color=green>
-	
-	// 向slave发送基于数据库@dictid的数据集argv[0 ~ argv-1]
-	void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
-	    listNode *ln;
-	    listIter li;
-	    int j, len;
-	    char llstr[REDIS_LONGSTR_SIZE];
-	
-	    /* If there aren't slaves, and there is no backlog buffer to populate,
-	     * we can return ASAP. */
-	    if (server.repl_backlog == NULL && listLength(slaves) == 0) return;
-	
-	    /* We can't have slaves attached and no backlog. */
-	    redisAssert(!(listLength(slaves) != 0 && server.repl_backlog == NULL));
-	
-	    /* Send SELECT command to every slave if needed. */
-		// 向每个slave发送select命令
-	    if (server.slaveseldb != dictid) {
-	        robj *selectcmd;
-	
-	        /* For a few DBs we have pre-computed SELECT command. */
-	        if (dictid >= 0 && dictid < REDIS_SHARED_SELECT_CMDS) {
-				// 如果dictid在[0, 19)之间，则直接使用预先生成的select命令字符集
-	            selectcmd = shared.select[dictid];
-	        } else {
-				// 否则就动态生成
-	            int dictid_len;
-	
-	            dictid_len = ll2string(llstr,sizeof(llstr),dictid);
-	            selectcmd = createObject(REDIS_STRING,
-	                sdscatprintf(sdsempty(),
-	                "*2\r\n$6\r\nSELECT\r\n$%d\r\n%s\r\n",
-	                dictid_len, llstr));
-	        }
-	
-	        /* Add the SELECT command into the backlog. */
-			// 把select命令放入backlog之中
-	        if (server.repl_backlog) feedReplicationBacklogWithObject(selectcmd);
-	
-	        /* Send it to slaves. */
-			// 遍历slave列表，分别向每个slave发送select dbid命令
-	        listRewind(slaves,&li);
-	        while((ln = listNext(&li))) {
-	            redisClient *slave = ln->value;
-	            addReply(slave,selectcmd);
-	        }
-	
-	        if (dictid < 0 || dictid >= REDIS_SHARED_SELECT_CMDS)
-				// 如果dictid不在[0, 10)内，则释放刚刚生成的字符串
-	            decrRefCount(selectcmd);
-	    }
-	    server.slaveseldb = dictid;
-	
-	    /* Write the command to the replication backlog if any. */
-		// 不管数据的内容，只要server的backlog存在，就把数据放进去
-	    if (server.repl_backlog) {
-	        char aux[REDIS_LONGSTR_SIZE+3]; // REDIS_LONGSTR_SIZE 21
-	
-	        /* Add the multi bulk reply length. */
-	        aux[0] = '*';
-	        len = ll2string(aux+1,sizeof(aux)-1,argc);
-	        aux[len+1] = '\r';
-	        aux[len+2] = '\n';
-	        feedReplicationBacklog(aux,len+3);
-	
-	        for (j = 0; j < argc; j++) {
-	            long objlen = stringObjectLen(argv[j]);
-	
-	            /* We need to feed the buffer with the object as a bulk reply
-	             * not just as a plain string, so create the $..CRLF payload len
-	             * and add the final CRLF */
-	            aux[0] = '$';
-	            len = ll2string(aux+1,sizeof(aux)-1,objlen);
-	            aux[len+1] = '\r';
-	            aux[len+2] = '\n';
-	            feedReplicationBacklog(aux,len+3);
-	            feedReplicationBacklogWithObject(argv[j]);
-	            feedReplicationBacklog(aux+len+1,2);
-	        }
-	    }
-	
-	    /* Write the command to every slave. */
-		// 遍历每个slave，把数据同步给slave
-	    listRewind(server.slaves,&li);
-	    while((ln = listNext(&li))) {
-	        redisClient *slave = ln->value;
-	
-	        /* Don't feed slaves that are still waiting for BGSAVE to start */
-			// 如果slave仍在等待BGSAVE，则跳过
-	        if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_START) continue;
-	
-	        /* Feed slaves that are waiting for the initial SYNC (so these commands
-	         * are queued in the output buffer until the initial SYNC completes),
-	         * or are already in sync with the master. */
-	
-	        /* Add the multi bulk length. */
-			// 先把数据长度发送过去
-	        addReplyMultiBulkLen(slave,argc);
-	
-	        /* Finally any additional argument that was not stored inside the
-	         * static buffer if any (from j to argc). */
-			// 发送数据内容
-	        for (j = 0; j < argc; j++)
-	            addReplyBulk(slave,argv[j]);
-	    }
+
+	/* REPLCONF <option> <value> <option> <value> ...
+	 * This command is used by a slave in order to configure the replication
+	 * process before starting it with the SYNC command.
+	 *
+	 * Currently the only use of this command is to communicate to the master
+	 * what is the listening port of the Slave redis instance, so that the
+	 * master can accurately list slaves and their listening ports in
+	 * the INFO output.
+	 *
+	 * In the future the same command can be used in order to configure
+	 * the replication to initiate an incremental replication instead of a
+	 * full resync. */
+	void replconfCommand(redisClient *c) {
+		int j;
+
+		if ((c->argc % 2) == 0) {
+			/* Number of arguments must be odd to make sure that every
+			 * option has a corresponding value. */
+			addReply(c,shared.syntaxerr);
+			return;
+		}
+
+		/* Process every option-value pair. */
+		for (j = 1; j < c->argc; j+=2) {
+			if (!strcasecmp(c->argv[j]->ptr,"listening-port")) {
+			// 告知master自己的listening port
+				long port;
+
+				if ((getLongFromObjectOrReply(c,c->argv[j+1],
+						&port,NULL) != REDIS_OK))
+					return;
+				c->slave_listening_port = port;
+			} else if (!strcasecmp(c->argv[j]->ptr,"ack")) {
+			// 告知master从当前已经处理了多少数据，用于更新repl_ack_off
+				/* REPLCONF ACK is used by slave to inform the master the amount
+				 * of replication stream that it processed so far. It is an
+				 * internal only command that normal clients should never use. */
+				long long offset;
+
+				if (!(c->flags & REDIS_SLAVE)) return;
+				if ((getLongLongFromObject(c->argv[j+1], &offset) != REDIS_OK))
+					return;
+				if (offset > c->repl_ack_off)
+					c->repl_ack_off = offset;
+				c->repl_ack_time = server.unixtime;
+				// 如果是无盘复制[即master不进行数据序列化操作]，则把client的replstate置为online状态，
+				// 这个命令就是用来确认slave活着，可以接收更多的数据
+				/* If this was a diskless replication, we need to really put
+				 * the slave online when the first ACK is received (which
+				 * confirms slave is online and ready to get more data). */
+				if (c->repl_put_online_on_ack && c->replstate == REDIS_REPL_ONLINE)
+					putSlaveOnline(c);
+				/* Note: this command does not reply anything! */
+				return;
+			} else if (!strcasecmp(c->argv[j]->ptr,"getack")) {
+			// 请求给slave回复一个ack
+				/* REPLCONF GETACK is used in order to request an ACK ASAP
+				 * to the slave. */
+				if (server.masterhost && server.master) replicationSendAck();
+				/* Note: this command does not reply anything! */
+			} else {
+				addReplyErrorFormat(c,"Unrecognized REPLCONF option: %s",
+					(char*)c->argv[j]->ptr);
+				return;
+			}
+		}
+		addReply(c,shared.ok);
 	}
 
-	/* Start a BGSAVE for replication goals, which is, selecting the disk or
-	 * socket target depending on the configuration, and making sure that
-	 * the script cache is flushed before to start.
+	/* 
+	 * 这个函数会把slave的state置为online态。当slave刚收到了rdb文件的数据时候
+	 * 这个函数会被调用，master会准备好把更多的数据同步给slave。
 	 *
-	 * Returns REDIS_OK on success or REDIS_ERR otherwise. */
-	int startBgsaveForReplication(void) {
-	    int retval;
-	
-	    redisLog(REDIS_NOTICE,"Starting BGSAVE for SYNC with target: %s",
-	        server.repl_diskless_sync ? "slaves sockets" : "disk");
-	
-	    if (server.repl_diskless_sync)
-	        retval = rdbSaveToSlavesSockets();
-	    else
-	        retval = rdbSaveBackground(server.rdb_filename);
-	
-	    /* Flush the script cache, since we need that slave differences are
-	     * accumulated without requiring slaves to match our cached scripts. */
-	    if (retval == REDIS_OK) replicationScriptCacheFlush();
-	    return retval;
+	 * 它的工作流程是：
+	 *
+	 * 1) 把slave置为ONLINE态。
+	 * 2) 添加可写事件，以把发送buffer的数据发送出去，因为收到SYNC命令的时候可写事件会被关闭，以利于积攒更多数据后再发出去。
+	 * 3) 更改good slave的数目
+	 */
+	void putSlaveOnline(redisClient *slave) {
+		slave->replstate = REDIS_REPL_ONLINE;
+		slave->repl_put_online_on_ack = 0;
+		slave->repl_ack_time = server.unixtime; /* Prevent false timeout. */
+		if (aeCreateFileEvent(server.el, slave->fd, AE_WRITABLE,
+			sendReplyToClient, slave) == AE_ERR) {
+			redisLog(REDIS_WARNING,"Unable to register writable event for slave bulk transfer: %s", strerror(errno));
+			freeClient(slave);
+			return;
+		}
+		refreshGoodSlavesCount();
+		redisLog(REDIS_NOTICE,"Synchronization with slave %s succeeded",
+			replicationGetSlaveName(slave));
 	}
+
+</font>
+
+###3.5 处理同步请求[psync or sync] ### 
+
+<font color=blue>
+
+进行数据同步须满足下列条件：
+
+- 状态不能是REDIS_SLAVE；
+- 不能处于sentinel模式；
+- 上次发送给slave的数据必须发送完毕；
+
+如果收到了psync命令，则先尝试进行增量同步。如果增量通过失败或者收到的命令是全量同步命令sync，则开始准备全量同步的工作。
+
+</font>
+
+<font color=green>
+
+	/* SYNC and PSYNC command implemenation. */
+	void syncCommand(redisClient *c) {
+		/* ignore SYNC if already slave or in monitor mode */
+		// 如果client的状态还是REDIS_SLAVE或者redis server处于sentinel模式，则拒绝处理SYNC命令
+		if (c->flags & REDIS_SLAVE) return;
+
+		/* Refuse SYNC requests if we are a slave but the link with our master
+		 * is not ok... */
+		// 如果当前redis是slave但是与其master的连接已经中断，则拒绝之
+		if (server.masterhost && server.repl_state != REDIS_REPL_CONNECTED) {
+			addReplyError(c,"Can't SYNC while not connected with my master");
+			return;
+		}
+
+		/* SYNC can't be issued when the server has pending data to send to
+		 * the client about already issued commands. We need a fresh reply
+		 * buffer registering the differences between the BGSAVE and the current
+		 * dataset, so that we can copy to other slaves if needed. */
+		// 如果发送给客户端的数据还没有发送完毕，暂不处理新的请求
+		if (listLength(c->reply) != 0 || c->bufpos != 0) {
+			addReplyError(c,"SYNC and PSYNC are invalid with pending output");
+			return;
+		}
+
+		redisLog(REDIS_NOTICE,"Slave %s asks for synchronization",
+			replicationGetSlaveName(c));
+
+		/* Try a partial resynchronization if this is a PSYNC command.
+		 * If it fails, we continue with usual full resynchronization, however
+		 * when this happens masterTryPartialResynchronization() already
+		 * replied with:
+		 *
+		 * +FULLRESYNC <runid> <offset>
+		 *
+		 * So the slave knows the new runid and offset to try a PSYNC later
+		 * if the connection with the master is lost. */
+		// 如果收到了psync请求，则尝试进行增量同步。
+		// 如果增量同步失败，master也会把自己的id以及同步开始offset发送给client
+		if (!strcasecmp(c->argv[0]->ptr,"psync")) {
+			if (masterTryPartialResynchronization(c) == REDIS_OK) {
+				server.stat_sync_partial_ok++;
+				return; /* No full resync needed, return. */
+			} else {
+				char *master_runid = c->argv[1]->ptr;
+
+				/* Increment stats for failed PSYNCs, but only if the
+				 * runid is not "?", as this is used by slaves to force a full
+				 * resync on purpose when they are not albe to partially
+				 * resync. */
+				if (master_runid[0] != '?') server.stat_sync_partial_err++;
+			}
+		} else {
+			/* If a slave uses SYNC, we are dealing with an old implementation
+			 * of the replication protocol (like redis-cli --slave). Flag the client
+			 * so that we don't expect to receive REPLCONF ACK feedbacks. */
+			c->flags |= REDIS_PRE_PSYNC;
+		}
+
+		/* Full resynchronization. */
+		server.stat_sync_full++;
+
+		/* Here we need to check if there is a background saving operation
+		 * in progress, or if it is required to start one */
+		if (server.rdb_child_pid != -1 &&
+			server.rdb_child_type == REDIS_RDB_CHILD_TYPE_DISK)
+		{
+			// 后台有一个子进程正常把redis的数据序列化到disk
+			/* Ok a background save is in progress. Let's check if it is a good
+			 * one for replication, i.e. if there is another slave that is
+			 * registering differences since the server forked to save. */
+			// 如果已经有申请全量同步的client，则把它的数据同步给@c，同时开始
+			// 等待redis把数据序列化完毕后获取rdb数据
+			redisClient *slave;
+			listNode *ln;
+			listIter li;
+			
+			// 检查是否有申请全量同步的slave
+			listRewind(server.slaves,&li);
+			while((ln = listNext(&li))) {
+				slave = ln->value;
+				if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_END) break;
+			}
+			if (ln) {
+				/* Perfect, the server is already registering differences for
+				 * another slave. Set the right state, and copy the buffer. */
+				// 如果已经有申请全量同步的slave，则把这个slave的待回复的数据同步给@c，
+				// 同时把@c的replstate设置为REDIS_REPL_WAIT_BGSAVE_END
+				copyClientOutputBuffer(c,slave);
+				c->replstate = REDIS_REPL_WAIT_BGSAVE_END;
+				redisLog(REDIS_NOTICE,"Waiting for end of BGSAVE for SYNC");
+			} else {
+				/* No way, we need to wait for the next BGSAVE in order to
+				 * register differences. */
+				// 等待下个周期的BGSAVE	
+				c->replstate = REDIS_REPL_WAIT_BGSAVE_START;
+				redisLog(REDIS_NOTICE,"Waiting for next BGSAVE for SYNC");
+			}
+		} else if (server.rdb_child_pid != -1 &&
+				   server.rdb_child_type == REDIS_RDB_CHILD_TYPE_SOCKET)
+		{
+			/* There is an RDB child process but it is writing directly to
+			 * children sockets. We need to wait for the next BGSAVE
+			 * in order to synchronize. */
+			// 存在BGSAVE进程，但是它正常通过socket连接把数据同步给另外一个slave，@c只好等待下一个BGSAVE周期了
+			c->replstate = REDIS_REPL_WAIT_BGSAVE_START;
+			redisLog(REDIS_NOTICE,"Waiting for next BGSAVE for SYNC");
+		} else {
+			if (server.repl_diskless_sync) {
+				/* Diskless replication RDB child is created inside
+				 * replicationCron() since we want to delay its start a
+				 * few seconds to wait for more slaves to arrive. */
+				// 如果server不会像磁盘写rdb数据，仅仅是通过socket连接同步数据，则
+				// 等待更多的slave连接过来，timer事件触发函数replicationCron会进行数据的同步
+				c->replstate = REDIS_REPL_WAIT_BGSAVE_START;
+				if (server.repl_diskless_sync_delay)
+					redisLog(REDIS_NOTICE,"Delay next BGSAVE for SYNC");
+			} else {
+				/* Ok we don't have a BGSAVE in progress, let's start one. */
+				// 如果不存在BGSAVE进程，则创建出来
+				if (startBgsaveForReplication() != REDIS_OK) {
+					redisLog(REDIS_NOTICE,"Replication failed, can't BGSAVE");
+					addReplyError(c,"Unable to perform background save");
+					return;
+				}
+				// 把replstate设置为REDIS_REPL_WAIT_BGSAVE_END，当BGSAVE工作完成的时候，
+				// 就可以开始把数据同步给slave，同事更新@c
+				c->replstate = REDIS_REPL_WAIT_BGSAVE_END;
+			}
+		}
+
+		// 如果用户设置了repl_disable_tcp_nodelay，则禁止掉TcpNoDelay属性。
+		if (server.repl_disable_tcp_nodelay)
+			anetDisableTcpNoDelay(NULL, c->fd); /* Non critical if it fails. */
+		c->repldbfd = -1;
+		c->flags |= REDIS_SLAVE;
+		server.slaveseldb = -1; /* Force to re-emit the SELECT command. */
+		// 把client添加到server的客户端集合中
+		listAddNodeTail(server.slaves,c);
+		// 如果server.slaves集合不为空而且backlog还没有创建，则创建之
+		if (listLength(server.slaves) == 1 && server.repl_backlog == NULL)
+			createReplicationBacklog();
+		return;
+	}
+
+	// 把一个client@src的待发送出的数据复制@dst
+	/* Copy 'src' client output buffers into 'dst' client output buffers.
+	 * The function takes care of freeing the old output buffers of the
+	 * destination client. */
+	void copyClientOutputBuffer(redisClient *dst, redisClient *src) {
+		listRelease(dst->reply);
+		dst->reply = listDup(src->reply);
+		memcpy(dst->buf,src->buf,src->bufpos);
+		dst->bufpos = src->bufpos;
+		dst->reply_bytes = src->reply_bytes;
+	}
+
+</font>
+
+####3.5.1 增量同步 ####
+
+<font color=blue>
+
+处理客户端的PSYNC命令，如果能够进行增量同步则调用函数addReplyReplicationBacklog进行数据增量同步，否则：
+1) 请求的runid与master的runid不符合；
+2) backlog还没有被创建出来；
+3) 增量请求的offset不合法，即offset不在(server.repl_backlog_off，server.repl_backlog_histlen)内；
+
+增量同步的详细流程：
+1) 设置client的flag为slave，设置state为REDIS_REPL_ONLINE，放在server.slaves集合中；
+2) 给slave发送通知“+CONTINUE\r\n"，以告知其master答应增量同步，slave对回复的解析参见/** 2.4.2 增量同步尝试 **/函数slaveTryPartialResynchronization；
+3) 从backlog中读取数据，发送给slave；
+
+全量同步准备流程:
+1) 发送"+FULLRESYNC master_run_id offset\r\n"给slave;
+2) 如果backlog为空，则offset赋值为1，在syncCommand末尾处会进行创建backlog的工作；
+3) syncCommand会在函数末尾把@c添加到server.slaves集合中。
+
+</font>
+
+<font color=green>
+
+	/* This function handles the PSYNC command from the point of view of a
+	 * master receiving a request for partial resynchronization.
+	 *
+	 * On success return REDIS_OK, otherwise REDIS_ERR is returned and we proceed
+	 * with the usual full resync. */
+	int masterTryPartialResynchronization(redisClient *c) {
+		long long psync_offset, psync_len;
+		char *master_runid = c->argv[1]->ptr;
+		char buf[128];
+		int buflen;
+
+		/* Is the runid of this master the same advertised by the wannabe slave
+		 * via PSYNC? If runid changed this master is a different instance and
+		 * there is no way to continue. */
+		// 如果请求的runid与master的runid不符合，则进行全量同步
+		if (strcasecmp(master_runid, server.runid)) {
+			/* Run id "?" is used by slaves that want to force a full resync. */
+			if (master_runid[0] != '?') {
+				redisLog(REDIS_NOTICE,"Partial resynchronization not accepted: "
+					"Runid mismatch (Client asked for runid '%s', my runid is '%s')",
+					master_runid, server.runid);
+			} else {
+				redisLog(REDIS_NOTICE,"Full resync requested by slave %s",
+					replicationGetSlaveName(c));
+			}
+			goto need_full_resync;
+		}
+		/* We still have the data our slave is asking for? */
+		// 获取psync_offset
+		if (getLongLongFromObjectOrReply(c,c->argv[2],&psync_offset,NULL) !=
+		   REDIS_OK) goto need_full_resync;
+		// 如果backlog还没有被创建出来或者增量请求的offset不合法，即offset
+		// 不在(server.repl_backlog_off，server.repl_backlog_histlen)内，则进行全量同步
+		if (!server.repl_backlog ||
+			psync_offset < server.repl_backlog_off ||
+			psync_offset > (server.repl_backlog_off + server.repl_backlog_histlen))
+		{
+			redisLog(REDIS_NOTICE,
+				"Unable to partial resync with slave %s for lack of backlog (Slave request was: %lld).", replicationGetSlaveName(c), psync_offset);
+			if (psync_offset > server.master_repl_offset) {
+				redisLog(REDIS_WARNING,
+					"Warning: slave %s tried to PSYNC with an offset that is greater than the master replication offset.", replicationGetSlaveName(c));
+			}
+			goto need_full_resync;
+		}
+
+		/* If we reached this point, we are able to perform a partial resync:
+		 * 1) Set client state to make it a slave.
+		 * 2) Inform the client we can continue with +CONTINUE
+		 * 3) Send the backlog data (from the offset to the end) to the slave. */
+		// 进行增量同步：
+		// 1) 设置client的flag为slave，设置state为REDIS_REPL_ONLINE，放在server.slaves集合中；
+		// 2) 给slave发送通知“+CONTINUE\r\n"，以告知其master答应增量同步，slave对回复的解析参见/** 2.4.2 增量同步尝试 **/函数slaveTryPartialResynchronization；
+		// 3) 从backlog中读取数据，发送给slave；
+		c->flags |= REDIS_SLAVE;
+		c->replstate = REDIS_REPL_ONLINE;
+		c->repl_ack_time = server.unixtime;
+		c->repl_put_online_on_ack = 0;
+		listAddNodeTail(server.slaves,c);
+		/* We can't use the connection buffers since they are used to accumulate
+		 * new commands at this stage. But we are sure the socket send buffer is
+		 * empty so this write will never fail actually. */
+		buflen = snprintf(buf,sizeof(buf),"+CONTINUE\r\n");
+		if (write(c->fd,buf,buflen) != buflen) {
+			freeClientAsync(c);
+			return REDIS_OK;
+		}
+		psync_len = addReplyReplicationBacklog(c,psync_offset);
+		redisLog(REDIS_NOTICE,
+			"Partial resynchronization request from %s accepted. Sending %lld bytes of backlog starting from offset %lld.",
+				replicationGetSlaveName(c),
+				psync_len, psync_offset);
+		/* Note that we don't need to set the selected DB at server.slaveseldb
+		 * to -1 to force the master to emit SELECT, since the slave already
+		 * has this state from the previous connection with the master. */
+
+		refreshGoodSlavesCount();
+		return REDIS_OK; /* The caller can return, no full resync needed. */
+
+	need_full_resync:
+		// 如果需要给客户端同步全量数据，则发送"+FULLRESYNC %s %lld\r\n"，
+		// 包括了master的id以及开始复制的地方的offset，slave对回复的解析可
+		// 参见/** 2.4.2 增量同步尝试 **/函数slaveTryPartialResynchronization
+		/* We need a full resync for some reason... notify the client. */
+		psync_offset = server.master_repl_offset;
+		/* Add 1 to psync_offset if it the replication backlog does not exists
+		 * as when it will be created later we'll increment the offset by one. */
+		// backlog还没有被创建出来，先把offset设置为1，backlog晚些时候会被创建出来
+		if (server.repl_backlog == NULL) psync_offset++;
+		/* Again, we can't use the connection buffers (see above). */
+		buflen = snprintf(buf,sizeof(buf),"+FULLRESYNC %s %lld\r\n",
+						  server.runid,psync_offset);
+		if (write(c->fd,buf,buflen) != buflen) {
+			freeClientAsync(c);
+			return REDIS_OK;
+		}
+		return REDIS_ERR;
+	}
+
+</font>
+
+#####3.5.1.1 增量同步backlog内的数据给某个的slave  #####
+
+<font color=green>
+
+	/* Feed the slave 'c' with the replication backlog starting from the
+	 * specified 'offset' up to the end of the backlog. */ 
+	// 从server backlog的@offset处开始读取数据放入@c的buffer，返回读取的内容的有效长度
+	long long addReplyReplicationBacklog(redisClient *c, long long offset) {
+		long long j, skip, len;
+
+		redisLog(REDIS_DEBUG, "[PSYNC] Slave request offset: %lld", offset);
+
+		// 如果backlog数据长度为0，则退出
+		if (server.repl_backlog_histlen == 0) {
+			redisLog(REDIS_DEBUG, "[PSYNC] Backlog history len is zero");
+			return 0;
+		}
+
+		redisLog(REDIS_DEBUG, "[PSYNC] Backlog size: %lld",
+				 server.repl_backlog_size);
+		redisLog(REDIS_DEBUG, "[PSYNC] First byte: %lld",
+				 server.repl_backlog_off);
+		redisLog(REDIS_DEBUG, "[PSYNC] History len: %lld",
+				 server.repl_backlog_histlen);
+		redisLog(REDIS_DEBUG, "[PSYNC] Current index: %lld",
+				 server.repl_backlog_idx);
+
+		/* Compute the amount of bytes we need to discard. */
+		// 废弃内容的长度
+		skip = offset - server.repl_backlog_off;
+		redisLog(REDIS_DEBUG, "[PSYNC] Skipping: %lld", skip);
+
+		/* Point j to the oldest byte, that is actaully our
+		 * server.repl_backlog_off byte. */
+		// 计算数据的真正起始处
+		j = (server.repl_backlog_idx +
+			(server.repl_backlog_size-server.repl_backlog_histlen)) %
+			server.repl_backlog_size;
+		redisLog(REDIS_DEBUG, "[PSYNC] Index of first byte: %lld", j);
+
+		/* Discard the amount of data to seek to the specified 'offset'. */
+		// 跳过废弃的内容，计算本次要读取的内容的起始处
+		j = (j + skip) % server.repl_backlog_size;
+
+		/* Feed slave with data. Since it is a circular buffer we have to
+		 * split the reply in two parts if we are cross-boundary. */
+		// 计算本地读取数据的有效长度，然后从backlog读取数据内容，放进client @c的buf里面
+		len = server.repl_backlog_histlen - skip;
+		redisLog(REDIS_DEBUG, "[PSYNC] Reply total length: %lld", len);
+		while(len) {
+			long long thislen =
+				((server.repl_backlog_size - j) < len) ?
+				(server.repl_backlog_size - j) : len;
+
+			redisLog(REDIS_DEBUG, "[PSYNC] addReply() length: %lld", thislen);
+			addReplySds(c,sdsnewlen(server.repl_backlog + j, thislen));
+			len -= thislen;
+			j = 0;
+		}
+		return server.repl_backlog_histlen - skip;
+	}
+
+</font>
+
+
+###3.6 replication 周期性任务 ###
+
+<font color=blue>
+
+master的周期性任务如下：
+
+- 1 master每10秒还会向slave发送PING命令以及“空包弹”[内容仅为一字节长度的'\n']；
+- 2 关闭与slave之间的超时的连接；
+- 3 没有slave，则释放backlog；
+- 4 如果没有slave且AOF被禁止，则释放Replication Script Cache；
+- 5 如果master没有起用磁盘存储，有客户端处于WAIT_BGSAVE_START，并且等待时间超过了repl-diskless-sync-delay，则把内存数据发送给slave；
+- 6 更新有效的slave数目。
+
+</font>
+
+<font color=red>
+
+!!!!注意repl-diskless-sync-delay这个字段的意义，它表示在无盘复制模式下收到第一个SYNC请求时，等待多个slave一起来请求SYNC之间的间隔时间。
+
+</font>
+
+<font color=green>
 
 	/* Replication cron function, called 1 time per second. */
 	void replicationCron(void) {
@@ -3083,7 +3569,7 @@ master收到slave的SYNC or PSYNC 请求后，才会与slave之间进行数据�
 	     * This code is also useful to trigger a BGSAVE if the diskless
 	     * replication was turned off with CONFIG SET, while there were already
 	     * slaves in WAIT_BGSAVE_START state. */
-		// 如果自身没有起用磁盘存储，则把内存数据发送给slave
+		// 如果自身没有起用磁盘存储，有客户端处于WAIT_BGSAVE_START，并且等待时间超过了repl-diskless-sync-delay，则把内存数据发送给slave
 	    if (server.rdb_child_pid == -1 && server.aof_child_pid == -1) {
 	        time_t idle, max_idle = 0;
 	        int slaves_waiting = 0;
@@ -3095,12 +3581,13 @@ master收到slave的SYNC or PSYNC 请求后，才会与slave之间进行数据�
 	            redisClient *slave = ln->value;
 	            if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_START) {
 	                idle = server.unixtime - slave->lastinteraction;
-	                if (idle > max_idle) max_idle = idle;
+	                if (idle > max_idle) max_idle = idle; // 更新最大空闲连接时长
 	                slaves_waiting++;
 	            }
 	        }
 	
 	        if (slaves_waiting && max_idle > server.repl_diskless_sync_delay) {
+			// 有slave正在等待，并且最长的等待时长已经超过了repl-diskless-sync-delay
 	            /* Start a BGSAVE. Usually with socket target, or with disk target
 	             * if there was a recent socket -> disk config change. */
 	            if (startBgsaveForReplication() == REDIS_OK) {
@@ -3109,6 +3596,8 @@ master收到slave的SYNC or PSYNC 请求后，才会与slave之间进行数据�
 	                 * the current target is disk. Otherwise it was already done
 	                 * by rdbSaveToSlavesSockets() which is called by
 	                 * startBgsaveForReplication(). */
+					// 已经启动了BGSAVE，所以有必要把正在等待BGSAVE的进程的状态由
+					// WAIT_BGSAVE_START修改为WAIT_BGSAVE_END
 	                listRewind(server.slaves,&li);
 	                while((ln = listNext(&li))) {
 	                    redisClient *slave = ln->value;
@@ -3122,6 +3611,901 @@ master收到slave的SYNC or PSYNC 请求后，才会与slave之间进行数据�
 	    /* Refresh the number of slaves with lag <= min-slaves-max-lag. */
 		// 更新有效的slave数目
 	    refreshGoodSlavesCount();
+	}
+	
+</font>
+
+###3.6.1 启动BASAVE进程 ###
+
+<font color=green>
+
+	/* Start a BGSAVE for replication goals, which is, selecting the disk or
+	 * socket target depending on the configuration, and making sure that
+	 * the script cache is flushed before to start.
+	 *
+	 * Returns REDIS_OK on success or REDIS_ERR otherwise. */
+	int startBgsaveForReplication(void) {
+		int retval;
+
+		redisLog(REDIS_NOTICE,"Starting BGSAVE for SYNC with target: %s",
+			server.repl_diskless_sync ? "slaves sockets" : "disk");
+
+		if (server.repl_diskless_sync)
+			retval = rdbSaveToSlavesSockets();
+		else
+			retval = rdbSaveBackground(server.rdb_filename);
+
+		/* Flush the script cache, since we need that slave differences are
+		 * accumulated without requiring slaves to match our cached scripts. */
+		if (retval == REDIS_OK) replicationScriptCacheFlush();
+		return retval;
+	}
+	
+</font>	
+
+####3.6.1.1 无盘数据同步 ####
+
+<font color=blue>
+
+子进程把数据同步给slave后，会把处理结果返回给父进程。父进程会在serverCron()里面调用backgroundSaveDoneHandlerSocket()检查处理结果。
+
+</font>	
+	
+<font color=green>	
+	
+	/* Spawn an RDB child that writes the RDB to the sockets of the slaves
+	 * that are currently in REDIS_REPL_WAIT_BGSAVE_START state. */
+	// 启动一个RDB子进程，把RDB数据通过socket发送给处于REDIS_REPL_WAIT_BGSAVE_START状态的进程
+	int rdbSaveToSlavesSockets(void) {
+		int *fds;
+		uint64_t *clientids;
+		int numfds;
+		listNode *ln;
+		listIter li;
+		pid_t childpid;
+		long long start;
+		int pipefds[2];
+
+		// 进程已经创建，退出
+		if (server.rdb_child_pid != -1) return REDIS_ERR;
+
+		/* Before to fork, create a pipe that will be used in order to
+		 * send back to the parent the IDs of the slaves that successfully
+		 * received all the writes. */
+		if (pipe(pipefds) == -1) return REDIS_ERR;
+		server.rdb_pipe_read_result_from_child = pipefds[0];
+		server.rdb_pipe_write_result_to_parent = pipefds[1];
+
+		/* Collect the file descriptors of the slaves we want to transfer
+		 * the RDB to, which are i WAIT_BGSAVE_START state. */
+		// 收集处于REDIS_REPL_WAIT_BGSAVE_START的slave，放入集合fds，并把状态修改为REDIS_REPL_WAIT_BGSAVE_END
+		fds = zmalloc(sizeof(int)*listLength(server.slaves));
+		/* We also allocate an array of corresponding client IDs. This will
+		 * be useful for the child process in order to build the report
+		 * (sent via unix pipe) that will be sent to the parent. */
+		// clientids存储了发送结果
+		clientids = zmalloc(sizeof(uint64_t)*listLength(server.slaves));
+		numfds = 0;
+
+		listRewind(server.slaves,&li);
+		while((ln = listNext(&li))) {
+			redisClient *slave = ln->value;
+
+			if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_START) {
+				clientids[numfds] = slave->id;
+				fds[numfds++] = slave->fd;
+				slave->replstate = REDIS_REPL_WAIT_BGSAVE_END;
+				/* Put the socket in non-blocking mode to simplify RDB transfer.
+				 * We'll restore it when the children returns (since duped socket
+				 * will share the O_NONBLOCK attribute with the parent). */
+				anetBlock(NULL,slave->fd);
+				anetSendTimeout(NULL,slave->fd,server.repl_timeout*1000);
+			}
+		}
+
+		/* Create the child process. */
+		// 创建子进程
+		start = ustime();
+		if ((childpid = fork()) == 0) {
+			/* Child */
+			int retval;
+			rio slave_sockets; // redis I/O通道
+			// 根据集合fds，创建与slave之间的rio通道
+			rioInitWithFdset(&slave_sockets,fds,numfds);
+			zfree(fds);
+
+			// 关闭监听socket
+			closeListeningSockets(0);
+			// 修改子进程名称
+			redisSetProcTitle("redis-rdb-to-slaves");
+
+			// 通过rio，把master的内存数据同步给fds
+			// 依据无盘数据同步的特点，给数据添加上特殊标记，标记数据段的开始和结束
+			
+			// 添加特殊标记，并发送数据
+			retval = rdbSaveRioWithEOFMark(&slave_sockets,NULL);
+			if (retval == REDIS_OK && rioFlush(&slave_sockets) == 0)
+				retval = REDIS_ERR;
+
+			if (retval == REDIS_OK) {
+				size_t private_dirty = zmalloc_get_private_dirty();
+
+				if (private_dirty) {
+					redisLog(REDIS_NOTICE,
+						"RDB: %zu MB of memory used by copy-on-write",
+						private_dirty/(1024*1024));
+				}
+
+				/* 返回OK意味着至少有一个slave收到了完整的数据。子进程可以
+				 * 以下数据格式通过pipe通报给父进程：
+				 *
+				 * <len> <slave[0].id> <slave[0].error> ...
+				 *
+				 * len和slave ID以及error，都是uint64_t类型的整数。
+				 *
+				 * 'id'代表了salve的id，'error'则表示了通信的成功与否，其值为0则代表成功，
+				 * 其他值则标示了相应的错误。
+				 */
+				void *msg = zmalloc(sizeof(uint64_t)*(1+2*numfds));
+				uint64_t *len = msg;
+				uint64_t *ids = len+1;
+				int j, msglen;
+
+				*len = numfds;
+				for (j = 0; j < numfds; j++) {
+					*ids++ = clientids[j];
+					*ids++ = slave_sockets.io.fdset.state[j];
+				}
+
+				/* Write the message to the parent. If we have no good slaves or
+				 * we are unable to transfer the message to the parent, we exit
+				 * with an error so that the parent will abort the replication
+				 * process with all the childre that were waiting. */
+				// 把replication结果汇报给父进程。如果没有一个处于正常状态的进程或者
+				// redis server无法把数据返回给父进程，则子进程会exit并返回一个error。
+				// 父进程知道结果后会停止fds集合内所有slave之间的replication。
+				msglen = sizeof(uint64_t)*(1+2*numfds);
+				if (*len == 0 ||
+				    // rdb_pipe_write_result_to_parent是pipefds[1]
+					write(server.rdb_pipe_write_result_to_parent,msg,msglen) 
+					!= msglen)
+				{
+					retval = REDIS_ERR; // 有错误
+				}
+				zfree(msg);
+			}
+			zfree(clientids);
+			exitFromChild((retval == REDIS_OK) ? 0 : 1);
+		} else {
+			/* Parent */
+			zfree(clientids); /* Not used by parent. Free ASAP. */
+			server.stat_fork_time = ustime()-start;
+			server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* GB per second. */
+			latencyAddSampleIfNeeded("fork",server.stat_fork_time/1000);
+			if (childpid == -1) {
+				redisLog(REDIS_WARNING,"Can't save in background: fork: %s",
+					strerror(errno));
+				zfree(fds);
+				close(pipefds[0]);
+				close(pipefds[1]);
+				return REDIS_ERR;
+			}
+			redisLog(REDIS_NOTICE,"Background RDB transfer started by pid %d",childpid);
+			server.rdb_save_time_start = time(NULL);
+			server.rdb_child_pid = childpid;
+			server.rdb_child_type = REDIS_RDB_CHILD_TYPE_SOCKET;
+			updateDictResizePolicy();
+			zfree(fds);
+			return REDIS_OK;
+		}
+		return REDIS_OK; /* unreached */
+	}
+
+#####3.6.1.1.1 无盘数据同步时创建redis I/O通道 #####		
+	
+<font color=blue>	
+	
+根据master与处于REDIS_REPL_WAIT_BGSAVE_START状态的slave之间的连接的集合，创建rio的I/O channel。注意下面的写数据的函数rioFdsetWrite，它每次写数据都是向所有的slave发送数据。
+	
+</font>
+	
+<font color=green>
+
+	/* ------------------- File descriptors set implementation ------------------- */
+
+	/* Returns 1 or 0 for success/failure.
+	 * The function returns success as long as we are able to correctly write
+	 * to at least one file descriptor.
+	 *
+	 * When buf is NULL adn len is 0, the function performs a flush operation
+	 * if there is some pending buffer, so this function is also used in order
+	 * to implement rioFdsetFlush(). */
+	static size_t rioFdsetWrite(rio *r, const void *buf, size_t len) {
+		ssize_t retval;
+		int j;
+		unsigned char *p = (unsigned char*) buf;
+		int doflush = (buf == NULL && len == 0);
+
+		/* To start we always append to our buffer. If it gets larger than
+		 * a given size, we actually write to the sockets. */
+		if (len) {
+			r->io.fdset.buf = sdscatlen(r->io.fdset.buf,buf,len);
+			len = 0; /* Prevent entering the while belove if we don't flush. */
+			if (sdslen(r->io.fdset.buf) > REDIS_IOBUF_LEN) doflush = 1;
+		}
+
+		if (doflush) {
+			p = (unsigned char*) r->io.fdset.buf;
+			len = sdslen(r->io.fdset.buf);
+		}
+
+		/* Write in little chunchs so that when there are big writes we
+		 * parallelize while the kernel is sending data in background to
+		 * the TCP socket. */
+		while(len) {
+			size_t count = len < 1024 ? len : 1024;
+			int broken = 0;
+			// 并行地向所有的slave发送数据
+			for (j = 0; j < r->io.fdset.numfds; j++) {
+				if (r->io.fdset.state[j] != 0) {
+					/* Skip FDs alraedy in error. */
+					broken++;
+					continue;
+				}
+
+				/* Make sure to write 'count' bytes to the socket regardless
+				 * of short writes. */
+				size_t nwritten = 0;
+				while(nwritten != count) {
+					retval = write(r->io.fdset.fds[j],p+nwritten,count-nwritten);
+					if (retval <= 0) {
+						/* With blocking sockets, which is the sole user of this
+						 * rio target, EWOULDBLOCK is returned only because of
+						 * the SO_SNDTIMEO socket option, so we translate the error
+						 * into one more recognizable by the user. */
+						if (retval == -1 && errno == EWOULDBLOCK) errno = ETIMEDOUT;
+						break;
+					}
+					nwritten += retval;
+				}
+
+				if (nwritten != count) {
+					/* Mark this FD as broken. */
+					r->io.fdset.state[j] = errno;
+					if (r->io.fdset.state[j] == 0) r->io.fdset.state[j] = EIO;
+				}
+			}
+			if (broken == r->io.fdset.numfds) return 0; /* All the FDs in error. */
+			p += count;
+			len -= count;
+			r->io.fdset.pos += count;
+		}
+
+		if (doflush) sdsclear(r->io.fdset.buf);
+		return 1;
+	}
+	
+	/* Flushes any buffer to target device if applicable. Returns 1 on success
+	 * and 0 on failures. */
+	static int rioFdsetFlush(rio *r) {
+		/* Our flush is implemented by the write method, that recognizes a
+		 * buffer set to NULL with a count of zero as a flush request. */
+		return rioFdsetWrite(r,NULL,0);
+	}
+
+	static const rio rioFdsetIO = {
+		rioFdsetRead,
+		rioFdsetWrite,
+		rioFdsetTell,
+		rioFdsetFlush,
+		NULL,           /* update_checksum */
+		0,              /* current checksum */
+		0,              /* bytes read or written */
+		0,              /* read/write chunk size */
+		{ { NULL, 0 } } /* union for io-specific vars */
+	};
+
+	void rioInitWithFdset(rio *r, int *fds, int numfds) {
+		int j;
+
+		*r = rioFdsetIO; // !!!
+		r->io.fdset.fds = zmalloc(sizeof(int)*numfds);
+		r->io.fdset.state = zmalloc(sizeof(int)*numfds);
+		memcpy(r->io.fdset.fds,fds,sizeof(int)*numfds);
+		for (j = 0; j < numfds; j++) r->io.fdset.state[j] = 0;
+		r->io.fdset.numfds = numfds;
+		r->io.fdset.pos = 0;
+		r->io.fdset.buf = sdsempty();
+	}
+
+</font>
+	
+#####3.6.1.1.2 无盘方式同步数据 #####	
+	
+<font color=blue>
+
+	/* This is just a wrapper to rdbSaveRio() that additionally adds a prefix
+	 * and a suffix to the generated RDB dump. The prefix is:
+	 *
+	 * $EOF:<40 bytes unguessable hex string>\r\n
+	 *
+	 * While the suffix is the 40 bytes hex string we announced in the prefix.
+	 * This way processes receiving the payload can understand when it ends
+	 * without doing any processing of the content. */
+	// 这个用于在RDB的头部和尾部添加如下内容：
+	// $EOF:<40 bytes unguessable hex string>\r\n
+	// 当redis处理rdb数据时看到这串随机字符串，就知道已经处理到了数据末尾了。
+	int rdbSaveRioWithEOFMark(rio *rdb, int *error) {
+		char eofmark[REDIS_EOF_MARK_SIZE];
+
+		// 产生40B长度的随机字符串
+		getRandomHexChars(eofmark,REDIS_EOF_MARK_SIZE);
+		// 把特殊标记放在rdb开头
+		if (error) *error = 0;
+		if (rioWrite(rdb,"$EOF:",5) == 0) goto werr;
+		if (rioWrite(rdb,eofmark,REDIS_EOF_MARK_SIZE) == 0) goto werr;
+		if (rioWrite(rdb,"\r\n",2) == 0) goto werr;
+		// 依照rdb格式组织redis数据的内容
+		if (rdbSaveRio(rdb,error) == REDIS_ERR) goto werr;
+		// 把特殊标记放在rdb末尾
+		if (rioWrite(rdb,eofmark,REDIS_EOF_MARK_SIZE) == 0) goto werr;
+		return REDIS_OK;
+
+	werr: /* Write error. */
+		/* Set 'error' only if not already set by rdbSaveRio() call. */
+		if (error && *error == 0) *error = errno;
+		return REDIS_ERR;
+	}
+
+	/* Produces a dump of the database in RDB format sending it to the specified
+	 * Redis I/O channel. On success REDIS_OK is returned, otherwise REDIS_ERR
+	 * is returned and part of the output, or all the output, can be
+	 * missing because of I/O errors.
+	 *
+	 * When the function returns REDIS_ERR and if 'error' is not NULL, the
+	 * integer pointed by 'error' is set to the value of errno just after the I/O
+	 * error. */
+	// 通过redis的I/O通道把一串数据以RDB格式发送出去。发送成功就返回REDIS_OK，失败就返回REDIS_ERR，
+	// 发送失败时，内容也会跟着丢失掉。
+	int rdbSaveRio(rio *rdb, int *error) {
+		dictIterator *di = NULL;
+		dictEntry *de;
+		char magic[10];
+		int j;
+		long long now = mstime();
+		uint64_t cksum;
+
+		// 如果启动了数据校验功能，就在数据开头写上"REDIS%04d"
+		if (server.rdb_checksum)
+			rdb->update_cksum = rioGenericUpdateChecksum;
+		snprintf(magic,sizeof(magic),"REDIS%04d",REDIS_RDB_VERSION);
+		if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
+
+		// 遍历每个db
+		for (j = 0; j < server.dbnum; j++) {
+			redisDb *db = server.db+j;
+			dict *d = db->dict;
+			if (dictSize(d) == 0) continue;
+			di = dictGetSafeIterator(d);
+			if (!di) return REDIS_ERR;
+
+			/* Write the SELECT DB opcode */
+			// 写上"select dbid"内容
+			if (rdbSaveType(rdb,REDIS_RDB_OPCODE_SELECTDB) == -1) goto werr;
+			if (rdbSaveLen(rdb,j) == -1) goto werr;
+
+			/* Iterate this DB writing every entry */
+			// 遍历db的每个key，把key-value保存起来
+			while((de = dictNext(di)) != NULL) {
+				sds keystr = dictGetKey(de);
+				robj key, *o = dictGetVal(de);
+				long long expire;
+
+				initStaticStringObject(key,keystr);
+				expire = getExpire(db,&key);
+				if (rdbSaveKeyValuePair(rdb,&key,o,expire,now) == -1) goto werr;
+			}
+			dictReleaseIterator(di);
+		}
+		di = NULL; /* So that we don't release it again on error. */
+
+		/* EOF opcode */
+		if (rdbSaveType(rdb,REDIS_RDB_OPCODE_EOF) == -1) goto werr;
+
+		/* CRC64 checksum. It will be zero if checksum computation is disabled, the
+		 * loading code skips the check in this case. */
+		// 为数据补充CRC64校验和
+		cksum = rdb->cksum;
+		memrev64ifbe(&cksum);
+		if (rioWrite(rdb,&cksum,8) == 0) goto werr;
+		return REDIS_OK;
+
+	werr:
+		if (error) *error = errno;
+		if (di) dictReleaseIterator(di);
+		return REDIS_ERR;
+	}
+
+	/* Save a key-value pair, with expire time, type, key, value.
+	 * On error -1 is returned.
+	 * On success if the key was actually saved 1 is returned, otherwise 0
+	 * is returned (the key was already expired). */
+	// 保存一个kv对：过期时间，数据类型，key的内容，value的内容。
+	// 如果返回-1，意味着发送了错误，返回0意味着数据过期了，返回1则意味着成功。
+	int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val,
+							long long expiretime, long long now)
+	{
+		/* Save the expire time */
+		if (expiretime != -1) {
+			/* If this key is already expired skip it */
+			if (expiretime < now) return 0;
+			if (rdbSaveType(rdb,REDIS_RDB_OPCODE_EXPIRETIME_MS) == -1) return -1;
+			if (rdbSaveMillisecondTime(rdb,expiretime) == -1) return -1;
+		}
+
+		/* Save type, key, value */
+		if (rdbSaveObjectType(rdb,val) == -1) return -1;
+		if (rdbSaveStringObject(rdb,key) == -1) return -1;
+		if (rdbSaveObject(rdb,val) == -1) return -1;
+		return 1;
+	}
+	
+</font>
+
+####3.6.1.2 把内存的数据序列化到磁盘 ####
+
+<font color=red>
+
+!!!!注意：这里只需要把数据同步到磁盘即可，至于何时把数据同步给slaves，可参见/** 3.5 处理同步请求[psync or sync] **/一节的函数syncCommand()。
+
+</font>
+
+<font color=green>
+
+	// 把数据序列化到磁盘
+	int rdbSaveBackground(char *filename) {
+		pid_t childpid;
+		long long start;
+
+		// 如果后台同步进程已经创建，则退出
+		if (server.rdb_child_pid != -1) return REDIS_ERR;
+
+		server.dirty_before_bgsave = server.dirty;
+		server.lastbgsave_try = time(NULL);
+
+		start = ustime();
+		if ((childpid = fork()) == 0) {
+			int retval;
+
+			/* Child */
+			// 关闭监听连接
+			closeListeningSockets(0);
+			// 修改进程名称
+			redisSetProcTitle("redis-rdb-bgsave");
+			// 保存数据并把数据同步给slaves
+			retval = rdbSave(filename);
+			if (retval == REDIS_OK) {
+				size_t private_dirty = zmalloc_get_private_dirty();
+
+				if (private_dirty) {
+					redisLog(REDIS_NOTICE,
+						"RDB: %zu MB of memory used by copy-on-write",
+						private_dirty/(1024*1024));
+				}
+			}
+			exitFromChild((retval == REDIS_OK) ? 0 : 1);
+		} else {
+			/* Parent */
+			server.stat_fork_time = ustime()-start;
+			server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* GB per second. */
+			latencyAddSampleIfNeeded("fork",server.stat_fork_time/1000);
+			if (childpid == -1) {
+				server.lastbgsave_status = REDIS_ERR;
+				redisLog(REDIS_WARNING,"Can't save in background: fork: %s",
+					strerror(errno));
+				return REDIS_ERR;
+			}
+			redisLog(REDIS_NOTICE,"Background saving started by pid %d",childpid);
+			server.rdb_save_time_start = time(NULL);
+			server.rdb_child_pid = childpid;
+			server.rdb_child_type = REDIS_RDB_CHILD_TYPE_DISK;
+			updateDictResizePolicy();
+			return REDIS_OK;
+		}
+		return REDIS_OK; /* unreached */
+	}
+
+	/* Save the DB on disk. Return REDIS_ERR on error, REDIS_OK on success. */
+	int rdbSave(char *filename) {
+		char tmpfile[256];
+		FILE *fp;
+		rio rdb;
+		int error;
+
+		// 创建临时rdb文件
+		snprintf(tmpfile,256,"temp-%d.rdb", (int) getpid());
+		fp = fopen(tmpfile,"w");
+		if (!fp) {
+			redisLog(REDIS_WARNING, "Failed opening .rdb for saving: %s",
+				strerror(errno));
+			return REDIS_ERR;
+		}
+
+		// 初始化redis I/O channel
+		rioInitWithFile(&rdb,fp);
+		// 把数据保存到磁盘
+		if (rdbSaveRio(&rdb,&error) == REDIS_ERR) {
+			errno = error;
+			goto werr;
+		}
+
+		// flush数据
+		/* Make sure data will not remain on the OS's output buffers */
+		if (fflush(fp) == EOF) goto werr;
+		if (fsync(fileno(fp)) == -1) goto werr;
+		if (fclose(fp) == EOF) goto werr;
+
+		/* Use RENAME to make sure the DB file is changed atomically only
+		 * if the generate DB file is ok. */
+		// 通过rname接口把临时文件名称修改为正式文件的名称
+		if (rename(tmpfile,filename) == -1) {
+			redisLog(REDIS_WARNING,"Error moving temp DB file on the final destination: %s", strerror(errno));
+			unlink(tmpfile);
+			return REDIS_ERR;
+		}
+		redisLog(REDIS_NOTICE,"DB saved on disk");
+		server.dirty = 0;
+		server.lastsave = time(NULL);
+		server.lastbgsave_status = REDIS_OK;
+		return REDIS_OK;
+
+	werr:
+		fclose(fp);
+		unlink(tmpfile);
+		redisLog(REDIS_WARNING,"Write error saving DB on disk: %s", strerror(errno));
+		return REDIS_ERR;
+	}
+
+</font>
+
+####3.6.1.2.1 依赖rdb文件数据同步时创建redis I/O通道 ####
+
+<font color=green>
+
+	/* Returns 1 or 0 for success/failure. */
+	static size_t rioFileWrite(rio *r, const void *buf, size_t len) {
+		size_t retval;
+
+		retval = fwrite(buf,len,1,r->io.file.fp);
+		r->io.file.buffered += len;
+
+		if (r->io.file.autosync &&
+			r->io.file.buffered >= r->io.file.autosync)
+		{
+			fflush(r->io.file.fp);
+			aof_fsync(fileno(r->io.file.fp));
+			r->io.file.buffered = 0;
+		}
+		return retval;
+	}
+
+	/* Returns 1 or 0 for success/failure. */
+	static size_t rioFileRead(rio *r, void *buf, size_t len) {
+		return fread(buf,len,1,r->io.file.fp);
+	}
+
+	/* Returns read/write position in file. */
+	static off_t rioFileTell(rio *r) {
+		return ftello(r->io.file.fp);
+	}
+
+	/* Flushes any buffer to target device if applicable. Returns 1 on success
+	 * and 0 on failures. */
+	static int rioFileFlush(rio *r) {
+		return (fflush(r->io.file.fp) == 0) ? 1 : 0;
+	}
+
+	static const rio rioFileIO = {
+		rioFileRead,
+		rioFileWrite,
+		rioFileTell,
+		rioFileFlush,
+		NULL,           /* update_checksum */
+		0,              /* current checksum */
+		0,              /* bytes read or written */
+		0,              /* read/write chunk size */
+		{ { NULL, 0 } } /* union for io-specific vars */
+	};
+
+	void rioInitWithFile(rio *r, FILE *fp) {
+		*r = rioFileIO;
+		r->io.file.fp = fp;
+		r->io.file.buffered = 0;
+		r->io.file.autosync = 0;
+	}
+
+</font>
+
+###3.6.2 核验处于良好连接状态的slave的数目 ###	
+
+<font color=blue>
+
+> 一下文字摘抄自：http://redisdoc.com/topic/replication.html#n
+>	
+>从Redis 2.8开始，为了保证数据的安全性，可以通过配置，让主服务器只在有至少N个当前已连接从服务器的情况下，才执行写命令。
+>
+>不过， 因为 Redis 使用异步复制， 所以主服务器发送的写数据并不一定会被从服务器接收到， 因此， 数据丢失的可能性仍然是存在的。
+>
+>以下是这个特性的运作原理：
+
+- 从服务器以每秒一次的频率 PING 主服务器一次， 并报告复制流的处理情况。
+- 主服务器会记录各个从服务器最后一次向它发送 PING 的时间。
+- 用户可以通过配置， 指定网络延迟的最大值 min-slaves-max-lag ， 以及执行写操作所需的至少从服务器数量 min-slaves-to-write 。
+- 如果至少有 min-slaves-to-write 个从服务器， 并且这些服务器的延迟值都少于 min-slaves-max-lag 秒， 那么主服务器就会执行客户端请求的写操作。
+
+>
+>你可以将这个特性看作 CAP 理论中的 C 的条件放宽版本：尽管不能保证写操作的持久性，但起码丢失数据的窗口会被严格限制在指定的秒数中。
+>
+>另一方面，如果条件达不到 min-slaves-to-write 和 min-slaves-max-lag 所指定的条件， 那么写操作就不会被执行，主服务器会向请求执行写操作的客户端返回一个错误。
+>
+
+</font>
+
+<font color=green>
+
+	/* ------------------------- MIN-SLAVES-TO-WRITE  --------------------------- */
+
+	/* This function counts the number of slaves with lag <= min-slaves-max-lag.
+	 * If the option is active, the server will prevent writes if there are not
+	 * enough connected slaves with the specified lag (or less). */
+	void refreshGoodSlavesCount(void) {
+		listIter li;
+		listNode *ln;
+		int good = 0;
+
+		if (!server.repl_min_slaves_to_write ||
+			!server.repl_min_slaves_max_lag) return;
+
+		listRewind(server.slaves,&li);
+		while((ln = listNext(&li))) {
+			redisClient *slave = ln->value;
+			time_t lag = server.unixtime - slave->repl_ack_time;
+
+			if (slave->replstate == REDIS_REPL_ONLINE &&
+				lag <= server.repl_min_slaves_max_lag) good++;
+		}
+		server.repl_good_slaves_count = good;
+	}
+	
+</font>
+
+###3.7 ###
+
+<font color=green>
+	int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
+		/* Check if a background saving or AOF rewrite in progress terminated. */
+		if (server.rdb_child_pid != -1 || server.aof_child_pid != -1) {
+			int statloc;
+			pid_t pid;
+
+			if ((pid = wait3(&statloc,WNOHANG,NULL)) != 0) {
+				int exitcode = WEXITSTATUS(statloc);
+				int bysignal = 0;
+
+				if (WIFSIGNALED(statloc)) bysignal = WTERMSIG(statloc);
+
+				if (pid == server.rdb_child_pid) {
+					backgroundSaveDoneHandler(exitcode,bysignal);
+				} else if (pid == server.aof_child_pid) {
+					backgroundRewriteDoneHandler(exitcode,bysignal);
+				} else {
+					redisLog(REDIS_WARNING,
+						"Warning, detected child with unmatched pid: %ld",
+						(long)pid);
+				}
+				updateDictResizePolicy();
+			}
+		} else {
+			/* If there is not a background saving/rewrite in progress check if
+			 * we have to save/rewrite now */
+			 for (j = 0; j < server.saveparamslen; j++) {
+				struct saveparam *sp = server.saveparams+j;
+
+				/* Save if we reached the given amount of changes,
+				 * the given amount of seconds, and if the latest bgsave was
+				 * successful or if, in case of an error, at least
+				 * REDIS_BGSAVE_RETRY_DELAY seconds already elapsed. */
+				if (server.dirty >= sp->changes &&
+					server.unixtime-server.lastsave > sp->seconds &&
+					(server.unixtime-server.lastbgsave_try >
+					 REDIS_BGSAVE_RETRY_DELAY ||
+					 server.lastbgsave_status == REDIS_OK))
+				{
+					redisLog(REDIS_NOTICE,"%d changes in %d seconds. Saving...",
+						sp->changes, (int)sp->seconds);
+					rdbSaveBackground(server.rdb_filename);
+					break;
+				}
+			 }
+
+			 /* Trigger an AOF rewrite if needed */
+			 if (server.rdb_child_pid == -1 &&
+				 server.aof_child_pid == -1 &&
+				 server.aof_rewrite_perc &&
+				 server.aof_current_size > server.aof_rewrite_min_size)
+			 {
+				long long base = server.aof_rewrite_base_size ?
+								server.aof_rewrite_base_size : 1;
+				long long growth = (server.aof_current_size*100/base) - 100;
+				if (growth >= server.aof_rewrite_perc) {
+					redisLog(REDIS_NOTICE,"Starting automatic rewriting of AOF on %lld%% growth",growth);
+					rewriteAppendOnlyFileBackground();
+				}
+			 }
+		}
+
+
+		/* AOF postponed flush: Try at every cron cycle if the slow fsync
+		 * completed. */
+		if (server.aof_flush_postponed_start) flushAppendOnlyFile(0);
+
+		/* AOF write errors: in this case we have a buffer to flush as well and
+		 * clear the AOF error in case of success to make the DB writable again,
+		 * however to try every second is enough in case of 'hz' is set to
+		 * an higher frequency. */
+		run_with_period(1000) {
+			if (server.aof_last_write_status == REDIS_ERR)
+				flushAppendOnlyFile(0);
+		}
+	}
+
+</font>
+
+<font color=green>
+
+	/* A background saving child (BGSAVE) terminated its work. Handle this.
+	 * This function covers the case of actual BGSAVEs. */
+	void backgroundSaveDoneHandlerDisk(int exitcode, int bysignal) {
+		if (!bysignal && exitcode == 0) {
+			redisLog(REDIS_NOTICE,
+				"Background saving terminated with success");
+			server.dirty = server.dirty - server.dirty_before_bgsave;
+			server.lastsave = time(NULL);
+			server.lastbgsave_status = REDIS_OK;
+		} else if (!bysignal && exitcode != 0) {
+			redisLog(REDIS_WARNING, "Background saving error");
+			server.lastbgsave_status = REDIS_ERR;
+		} else {
+			mstime_t latency;
+
+			redisLog(REDIS_WARNING,
+				"Background saving terminated by signal %d", bysignal);
+			latencyStartMonitor(latency);
+			rdbRemoveTempFile(server.rdb_child_pid);
+			latencyEndMonitor(latency);
+			latencyAddSampleIfNeeded("rdb-unlink-temp-file",latency);
+			/* SIGUSR1 is whitelisted, so we have a way to kill a child without
+			 * tirggering an error conditon. */
+			if (bysignal != SIGUSR1)
+				server.lastbgsave_status = REDIS_ERR;
+		}
+		server.rdb_child_pid = -1;
+		server.rdb_child_type = REDIS_RDB_CHILD_TYPE_NONE;
+		server.rdb_save_time_last = time(NULL)-server.rdb_save_time_start;
+		server.rdb_save_time_start = -1;
+		/* Possibly there are slaves waiting for a BGSAVE in order to be served
+		 * (the first stage of SYNC is a bulk transfer of dump.rdb) */
+		updateSlavesWaitingBgsave((!bysignal && exitcode == 0) ? REDIS_OK : REDIS_ERR, REDIS_RDB_CHILD_TYPE_DISK);
+	}
+
+	/* A background saving child (BGSAVE) terminated its work. Handle this.
+	 * This function covers the case of RDB -> Salves socket transfers for
+	 * diskless replication. */
+	void backgroundSaveDoneHandlerSocket(int exitcode, int bysignal) {
+		uint64_t *ok_slaves;
+
+		if (!bysignal && exitcode == 0) {
+			redisLog(REDIS_NOTICE,
+				"Background RDB transfer terminated with success");
+		} else if (!bysignal && exitcode != 0) {
+			redisLog(REDIS_WARNING, "Background transfer error");
+		} else {
+			redisLog(REDIS_WARNING,
+				"Background transfer terminated by signal %d", bysignal);
+		}
+		server.rdb_child_pid = -1;
+		server.rdb_child_type = REDIS_RDB_CHILD_TYPE_NONE;
+		server.rdb_save_time_start = -1;
+
+		/* If the child returns an OK exit code, read the set of slave client
+		 * IDs and the associated status code. We'll terminate all the slaves
+		 * in error state.
+		 *
+		 * If the process returned an error, consider the list of slaves that
+		 * can continue to be emtpy, so that it's just a special case of the
+		 * normal code path. */
+		ok_slaves = zmalloc(sizeof(uint64_t)); /* Make space for the count. */
+		ok_slaves[0] = 0;
+		if (!bysignal && exitcode == 0) {
+			int readlen = sizeof(uint64_t);
+
+			if (read(server.rdb_pipe_read_result_from_child, ok_slaves, readlen) ==
+					 readlen)
+			{
+				readlen = ok_slaves[0]*sizeof(uint64_t)*2;
+
+				/* Make space for enough elements as specified by the first
+				 * uint64_t element in the array. */
+				ok_slaves = zrealloc(ok_slaves,sizeof(uint64_t)+readlen);
+				if (readlen &&
+					read(server.rdb_pipe_read_result_from_child, ok_slaves+1,
+						 readlen) != readlen)
+				{
+					ok_slaves[0] = 0;
+				}
+			}
+		}
+
+		close(server.rdb_pipe_read_result_from_child);
+		close(server.rdb_pipe_write_result_to_parent);
+
+		/* We can continue the replication process with all the slaves that
+		 * correctly received the full payload. Others are terminated. */
+		listNode *ln;
+		listIter li;
+
+		listRewind(server.slaves,&li);
+		while((ln = listNext(&li))) {
+			redisClient *slave = ln->value;
+
+			if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_END) {
+				uint64_t j;
+				int errorcode = 0;
+
+				/* Search for the slave ID in the reply. In order for a slave to
+				 * continue the replication process, we need to find it in the list,
+				 * and it must have an error code set to 0 (which means success). */
+				for (j = 0; j < ok_slaves[0]; j++) {
+					if (slave->id == ok_slaves[2*j+1]) {
+						errorcode = ok_slaves[2*j+2];
+						break; /* Found in slaves list. */
+					}
+				}
+				if (j == ok_slaves[0] || errorcode != 0) {
+					redisLog(REDIS_WARNING,
+					"Closing slave %s: child->slave RDB transfer failed: %s",
+						replicationGetSlaveName(slave),
+						(errorcode == 0) ? "RDB transfer child aborted"
+										 : strerror(errorcode));
+					freeClient(slave);
+				} else {
+					redisLog(REDIS_WARNING,
+					"Slave %s correctly received the streamed RDB file.",
+						replicationGetSlaveName(slave));
+					/* Restore the socket as non-blocking. */
+					anetNonBlock(NULL,slave->fd);
+					anetSendTimeout(NULL,slave->fd,0);
+				}
+			}
+		}
+		zfree(ok_slaves);
+
+		updateSlavesWaitingBgsave((!bysignal && exitcode == 0) ? REDIS_OK : REDIS_ERR, REDIS_RDB_CHILD_TYPE_SOCKET);
+	}
+
+	/* When a background RDB saving/transfer terminates, call the right handler. */
+	void backgroundSaveDoneHandler(int exitcode, int bysignal) {
+		switch(server.rdb_child_type) {
+		case REDIS_RDB_CHILD_TYPE_DISK:
+			backgroundSaveDoneHandlerDisk(exitcode,bysignal);
+			break;
+		case REDIS_RDB_CHILD_TYPE_SOCKET:
+			backgroundSaveDoneHandlerSocket(exitcode,bysignal);
+			break;
+		default:
+			redisPanic("Unknown RDB child type.");
+			break;
+		}
 	}
 
 </font>
