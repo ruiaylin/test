@@ -4640,6 +4640,7 @@ master的周期性任务如下：
 		/* Before sending the RDB file, we send the preamble as configured by the
 		 * replication process. Currently the preamble is just the bulk count of
 		 * the file in the form "$<length>\r\n". */
+		// 如果存在数据首部，就先把数据首部发送出去。rdb文件的数据首部就是bulk的格式。
 		if (slave->replpreamble) {
 			nwritten = write(fd,slave->replpreamble,sdslen(slave->replpreamble));
 			if (nwritten == -1) {
@@ -4655,11 +4656,13 @@ master的周期性任务如下：
 				slave->replpreamble = NULL;
 				/* fall through sending data. */
 			} else {
+				// 如果收据首部没有发送完，就退出，等待下次流程接着发。
 				return;
 			}
 		}
 
 		/* If the preamble was already transfered, send the RDB bulk data. */
+		// 读取rdb文件，并发送给slave
 		lseek(slave->repldbfd,slave->repldboff,SEEK_SET);
 		buflen = read(slave->repldbfd,buf,REDIS_IOBUF_LEN);
 		if (buflen <= 0) {
@@ -4681,6 +4684,7 @@ master的周期性任务如下：
 		if (slave->repldboff == slave->repldbsize) {
 			close(slave->repldbfd);
 			slave->repldbfd = -1;
+			// 数据发送完毕，就删除掉write事件
 			aeDeleteFileEvent(server.el,slave->fd,AE_WRITABLE);
 			putSlaveOnline(slave);
 		}
