@@ -4279,19 +4279,22 @@ master的周期性任务如下：
 	
 </font>
 
-###3.7 ###
+###3.7 其他周期性任务###
 
 <font color=green>
 	int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 		/* Check if a background saving or AOF rewrite in progress terminated. */
+		// 检查后台任务[rdb or aof]是否结束
 		if (server.rdb_child_pid != -1 || server.aof_child_pid != -1) {
 			int statloc;
 			pid_t pid;
 
+			// 非阻塞等待
 			if ((pid = wait3(&statloc,WNOHANG,NULL)) != 0) {
 				int exitcode = WEXITSTATUS(statloc);
 				int bysignal = 0;
 
+				// 如果子进程被信号中断，取得信号值
 				if (WIFSIGNALED(statloc)) bysignal = WTERMSIG(statloc);
 
 				if (pid == server.rdb_child_pid) {
@@ -4361,26 +4364,53 @@ master的周期性任务如下：
 
 </font>
 
+####3.7.1 检查后台任务完成进度 ####
+
+<font color=green>
+
+	/* When a background RDB saving/transfer terminates, call the right handler. */
+	void backgroundSaveDoneHandler(int exitcode, int bysignal) {
+		switch(server.rdb_child_type) {
+		case REDIS_RDB_CHILD_TYPE_DISK:
+			backgroundSaveDoneHandlerDisk(exitcode,bysignal);
+			break;
+		case REDIS_RDB_CHILD_TYPE_SOCKET:
+			backgroundSaveDoneHandlerSocket(exitcode,bysignal);
+			break;
+		default:
+			redisPanic("Unknown RDB child type.");
+			break;
+		}
+	}
+	
+</font>
+
+#####3.7.1.1 检查有盘方式下BGSAVE后台任务完成进度 #####
+
 <font color=green>
 
 	/* A background saving child (BGSAVE) terminated its work. Handle this.
 	 * This function covers the case of actual BGSAVEs. */
 	void backgroundSaveDoneHandlerDisk(int exitcode, int bysignal) {
 		if (!bysignal && exitcode == 0) {
+		// 成功完成把数据序列化到磁盘的任务
 			redisLog(REDIS_NOTICE,
 				"Background saving terminated with success");
 			server.dirty = server.dirty - server.dirty_before_bgsave;
 			server.lastsave = time(NULL);
 			server.lastbgsave_status = REDIS_OK;
 		} else if (!bysignal && exitcode != 0) {
+		// 发生错误
 			redisLog(REDIS_WARNING, "Background saving error");
 			server.lastbgsave_status = REDIS_ERR;
 		} else {
+		// 后台任务被signal中断
 			mstime_t latency;
 
 			redisLog(REDIS_WARNING,
 				"Background saving terminated by signal %d", bysignal);
 			latencyStartMonitor(latency);
+			// 删除临时文件
 			rdbRemoveTempFile(server.rdb_child_pid);
 			latencyEndMonitor(latency);
 			latencyAddSampleIfNeeded("rdb-unlink-temp-file",latency);
@@ -4398,9 +4428,13 @@ master的周期性任务如下：
 		updateSlavesWaitingBgsave((!bysignal && exitcode == 0) ? REDIS_OK : REDIS_ERR, REDIS_RDB_CHILD_TYPE_DISK);
 	}
 
-	/* A background saving child (BGSAVE) terminated its work. Handle this.
-	 * This function covers the case of RDB -> Salves socket transfers for
-	 * diskless replication. */
+
+</font>
+
+#####3.7.1.2 检查无盘方式下REPLICATION任务完成进度 #####
+
+<font color=green>
+
 	void backgroundSaveDoneHandlerSocket(int exitcode, int bysignal) {
 		uint64_t *ok_slaves;
 
@@ -4417,13 +4451,9 @@ master的周期性任务如下：
 		server.rdb_child_type = REDIS_RDB_CHILD_TYPE_NONE;
 		server.rdb_save_time_start = -1;
 
-		/* If the child returns an OK exit code, read the set of slave client
-		 * IDs and the associated status code. We'll terminate all the slaves
-		 * in error state.
-		 *
-		 * If the process returned an error, consider the list of slaves that
-		 * can continue to be emtpy, so that it's just a special case of the
-		 * normal code path. */
+		/* 
+		 * 如果子进程返回了OK，则设置相应client的status。否则就关闭同步数据时发生错误的连接。
+		 */
 		ok_slaves = zmalloc(sizeof(uint64_t)); /* Make space for the count. */
 		ok_slaves[0] = 0;
 		if (!bysignal && exitcode == 0) {
@@ -4493,18 +4523,166 @@ master的周期性任务如下：
 		updateSlavesWaitingBgsave((!bysignal && exitcode == 0) ? REDIS_OK : REDIS_ERR, REDIS_RDB_CHILD_TYPE_SOCKET);
 	}
 
-	/* When a background RDB saving/transfer terminates, call the right handler. */
-	void backgroundSaveDoneHandler(int exitcode, int bysignal) {
-		switch(server.rdb_child_type) {
-		case REDIS_RDB_CHILD_TYPE_DISK:
-			backgroundSaveDoneHandlerDisk(exitcode,bysignal);
-			break;
-		case REDIS_RDB_CHILD_TYPE_SOCKET:
-			backgroundSaveDoneHandlerSocket(exitcode,bysignal);
-			break;
-		default:
-			redisPanic("Unknown RDB child type.");
-			break;
+</font>
+
+#####3.7.1.3 检查完毕后更新相应slave的状态 #####
+
+<font color=blue>
+
+如果有盘方式下BGSAVE任务完成，则开始把数据同步给相应的slave。
+
+</font>
+
+<font color=green>
+
+	/* 
+	 * 每次后台保存数据运行完毕或者redis的replicaton的策略由有盘方式改为无盘方式时，
+	 * 这个函数就会被调用。
+	 *
+	 * 函数找出正在等待bgsave任务完成的slave后，进行无阻塞的数据同步。如果检查到
+	 * 后台在进行BGSAVE时又有新的slave连接过来，那么就让它等待下一次BGSAVE，因为
+	 * 保存RDB数据的过程中又有了新的数据，别的进程没有积存这些数据。
+	 * 
+	 * @bgsaveerr: 如果其值为REDIS_OK，则说明BGSAVE任务成功，如果是REDIS_ERR则说明发生了错误。
+	 * @type: 则用于说明子进程的任务类型(disk or socket target). 
+	 */
+	void updateSlavesWaitingBgsave(int bgsaveerr, int type) {
+		listNode *ln;
+		int startbgsave = 0;
+		listIter li;
+
+		// 遍历所有的slave
+		listRewind(server.slaves,&li);
+		while((ln = listNext(&li))) {
+			redisClient *slave = ln->value;
+
+			if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_START) {
+				startbgsave = 1;
+				slave->replstate = REDIS_REPL_WAIT_BGSAVE_END;
+			} else if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_END) {
+				struct redis_stat buf;
+
+				/* If this was an RDB on disk save, we have to prepare to send
+				 * the RDB from disk to the slave socket. Otherwise if this was
+				 * already an RDB -> Slaves socket transfer, used in the case of
+				 * diskless replication, our work is trivial, we can just put
+				 * the slave online. */
+				// 如果是有盘方式，则准备好把数据同步给slave。但如是socket这种无盘
+				// 传输方式的话，这里仅仅的任务就是把slave置为online状态。
+				if (type == REDIS_RDB_CHILD_TYPE_SOCKET) {
+					redisLog(REDIS_NOTICE,
+						"Streamed RDB transfer with slave %s succeeded (socket). Waiting for REPLCONF ACK from slave to enable streaming",
+							replicationGetSlaveName(slave));
+					/* Note: we wait for a REPLCONF ACK message from slave in
+					 * order to really put it online (install the write handler
+					 * so that the accumulated data can be transfered). However
+					 * we change the replication state ASAP, since our slave
+					 * is technically online now. */
+					// 正常情况下，只有等到slave的REPLCONF ACK回复，才会把它置为online
+					// 状态。但是这种情况就不用了，因为其本来就是online状态。
+					slave->replstate = REDIS_REPL_ONLINE;
+					slave->repl_put_online_on_ack = 1;
+					slave->repl_ack_time = server.unixtime; /* Timeout otherwise. */
+				} else {
+					// 如果后台bgsave任务出了差错，那就释放掉连接
+					if (bgsaveerr != REDIS_OK) {
+						freeClient(slave);
+						redisLog(REDIS_WARNING,"SYNC failed. BGSAVE child returned an error");
+						continue;
+					}
+					// 准备好把rdb数据同步给slave
+					// 注意下面的逻辑流程中把写事件的callback回调函数更改为sendBulkToSlave
+					if ((slave->repldbfd = open(server.rdb_filename,O_RDONLY)) == -1 ||
+						redis_fstat(slave->repldbfd,&buf) == -1) {
+						freeClient(slave);
+						redisLog(REDIS_WARNING,"SYNC failed. Can't open/stat DB after BGSAVE: %s", strerror(errno));
+						continue;
+					}
+					slave->repldboff = 0;
+					slave->repldbsize = buf.st_size;
+					slave->replstate = REDIS_REPL_SEND_BULK;
+					slave->replpreamble = sdscatprintf(sdsempty(),"$%lld\r\n",
+						(unsigned long long) slave->repldbsize);
+
+					aeDeleteFileEvent(server.el,slave->fd,AE_WRITABLE);
+					if (aeCreateFileEvent(server.el, slave->fd, AE_WRITABLE, sendBulkToSlave, slave) == AE_ERR) {
+						freeClient(slave);
+						continue;
+					}
+				}
+			}
+		}
+		// 如果有进程等待新的BGSAVE，则再次启动BGSAVE任务，详细流程见/** 3.6.1 启动BASAVE进程 **/的函数startBgsaveForReplication
+		if (startbgsave) {
+			if (startBgsaveForReplication() != REDIS_OK) {
+				listIter li;
+
+				listRewind(server.slaves,&li);
+				redisLog(REDIS_WARNING,"SYNC failed. BGSAVE failed");
+				while((ln = listNext(&li))) {
+					redisClient *slave = ln->value;
+
+					if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_START)
+						freeClient(slave);
+				}
+			}
+		}
+	}
+
+	// 同步磁盘数据给slaves
+	void sendBulkToSlave(aeEventLoop *el, int fd, void *privdata, int mask) {
+		redisClient *slave = privdata;
+		REDIS_NOTUSED(el);
+		REDIS_NOTUSED(mask);
+		char buf[REDIS_IOBUF_LEN];
+		ssize_t nwritten, buflen;
+
+		/* Before sending the RDB file, we send the preamble as configured by the
+		 * replication process. Currently the preamble is just the bulk count of
+		 * the file in the form "$<length>\r\n". */
+		if (slave->replpreamble) {
+			nwritten = write(fd,slave->replpreamble,sdslen(slave->replpreamble));
+			if (nwritten == -1) {
+				redisLog(REDIS_VERBOSE,"Write error sending RDB preamble to slave: %s",
+					strerror(errno));
+				freeClient(slave);
+				return;
+			}
+			server.stat_net_output_bytes += nwritten;
+			sdsrange(slave->replpreamble,nwritten,-1);
+			if (sdslen(slave->replpreamble) == 0) {
+				sdsfree(slave->replpreamble);
+				slave->replpreamble = NULL;
+				/* fall through sending data. */
+			} else {
+				return;
+			}
+		}
+
+		/* If the preamble was already transfered, send the RDB bulk data. */
+		lseek(slave->repldbfd,slave->repldboff,SEEK_SET);
+		buflen = read(slave->repldbfd,buf,REDIS_IOBUF_LEN);
+		if (buflen <= 0) {
+			redisLog(REDIS_WARNING,"Read error sending DB to slave: %s",
+				(buflen == 0) ? "premature EOF" : strerror(errno));
+			freeClient(slave);
+			return;
+		}
+		if ((nwritten = write(fd,buf,buflen)) == -1) {
+			if (errno != EAGAIN) {
+				redisLog(REDIS_WARNING,"Write error sending DB to slave: %s",
+					strerror(errno));
+				freeClient(slave);
+			}
+			return;
+		}
+		slave->repldboff += nwritten;
+		server.stat_net_output_bytes += nwritten;
+		if (slave->repldboff == slave->repldbsize) {
+			close(slave->repldbfd);
+			slave->repldbfd = -1;
+			aeDeleteFileEvent(server.el,slave->fd,AE_WRITABLE);
+			putSlaveOnline(slave);
 		}
 	}
 
