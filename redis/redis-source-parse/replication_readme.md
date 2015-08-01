@@ -10,7 +10,7 @@
 
 - 1 加载配置；
 - 2 初始化redis master、slave以及sentinel的sri；
-- 3 注册事件事件serverCron，定时地调用sentinel的逻辑loop函数sentinelTimer。
+- 3 注册事件事件serverCron。
 
 </font>
 
@@ -467,7 +467,7 @@
 
 </font>
 
-####1.3.2 注册接受外部链接的函数 ####
+####1.3.2 注册监听回调函数 ####
 
 <font color=green>
 	
@@ -536,7 +536,7 @@
  
 >创建客户端后注册接受client的请求的回调函数readQueryFromClient，最后把客户端放入server的客户端集合:server.clients。
 >
->如果client集合超限就给client返回err msg，然后再释放client句柄并关闭连接。
+>如果client集合超限[默认是10000]就给client返回err msg，然后再释放client句柄并关闭连接。
 
 </font>
 
@@ -2491,7 +2491,8 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 - 9 如果是slave且与master的连接有问题而且"slave-serve-stale-data"是no，则只处理INFO和SLAVEOF命令；
 - 10 如果server正在加载数据而命令是加载数据其间不能处理的，则拒绝处理；
 - 11 如果处理script脚本已经超时，则只能处理auth、replconf和shutdown之类的命令；
-- 12 执行命令，如果是事务命令则排队执行，否则条用call函数处理命令。
+- 12 执行命令，如果是事务命令则排队执行，否则条用call函数处理命令;
+- 13 执行完命令，然后把命令放在backlog中，同步给slaves。
 	
 </font>
 
@@ -2659,7 +2660,10 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	        addReply(c,shared.queued);
 	    } else {
 			// 立即执行命令
+			// #define REDIS_CALL_FULL (REDIS_CALL_SLOWLOG | REDIS_CALL_STATS | REDIS_CALL_PROPAGATE))
 	        call(c,REDIS_CALL_FULL);
+			// c->woff记录redis执行完命令后server的master_repl_offset值
+			// 对这个值的使用可参见/** 3.5 处理wait命令 **/的函数waitCommand()
 	        c->woff = server.master_repl_offset;
 	        if (listLength(server.ready_keys))
 	            handleClientsBlockedOnLists();
@@ -2673,7 +2677,11 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 
 <font color=blue>
 
-执行用户请求，并把内容序列化到磁盘、同步给slave。
+>
+>执行用户请求，如果请求是写命令则把内容序列化到磁盘、同步给slave。
+>
+>当命令是写命令的时候，server的dirty值会自增。所以这里通过dirty值即可判断是否应该做序列化。
+>
 
 </font>
 
@@ -2688,11 +2696,13 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	    /* Call the command. */
 	    c->flags &= ~(REDIS_FORCE_AOF|REDIS_FORCE_REPL);
 	    redisOpArrayInit(&server.also_propagate);
+		// 计算处理命令前的dirty值
 	    dirty = server.dirty;
 	    start = ustime();
 		// 调用命令的执行函数
 	    c->cmd->proc(c);
 	    duration = ustime()-start;
+		// 计算处理命令后的dirty差值
 	    dirty = server.dirty-dirty;
 	    if (dirty < 0) dirty = 0;
 		
@@ -2702,7 +2712,8 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	        int flags = REDIS_PROPAGATE_NONE;
 	
 	        if (c->flags & REDIS_FORCE_REPL) flags |= REDIS_PROPAGATE_REPL;
-	        if (c->flags & REDIS_FORCE_AOF) flags |= REDIS_PROPAGATE_AOF;
+	        if (c->flags & REDIS_FORCE_AOF) flags |= REDIS_PROPAGATE_AOF;  // 命令放在
+			// dirty为正数，说明当前命令是一个写命令，需要同步到disk和slaves
 	        if (dirty)
 	            flags |= (REDIS_PROPAGATE_REPL | REDIS_PROPAGATE_AOF);
 	        if (flags != REDIS_PROPAGATE_NONE)
@@ -2739,7 +2750,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 
 - 1 确定cmd所在的db，先附加select db命令至backlog buffer；
 - 2 把cmd以及其参数放进backlog buffer；
-- 3 把backlog buffer的内容发送给slaves。
+- 3 把backlog buffer的内容发送给slaves[还在等待BGSAVE的client除外]。
 
 </font>
 
@@ -2846,6 +2857,7 @@ slave每次与master之间有通信时，server.master->lastinteraction都会被
 	        redisClient *slave = ln->value;
 	
 	        /* Don't feed slaves that are still waiting for BGSAVE to start */
+			// REDIS_REPL_WAIT_BGSAVE_START说明slave还在等待master的全量数据
 	        if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_START) continue;
 	
 	        /* Feed slaves that are waiting for the initial SYNC (so these commands
@@ -2972,28 +2984,20 @@ backlog buffer[server.repl_backlog]可以认为是一种ring buffer，几个重�
 
 <font color=blue>
 
->客户端会在发起sync命令之前发送这个REPLCONF命令，以用于确认可以开始replication流程。
->
->目前slave仅仅用到了向master发送自己的listening port的功能，让master知道自己的监听端口，master在处理info命令时候就能告诉客户端自己的slave的监听端口。
->
->在将来的工作中，这个函数的其他功能会被调用，以方便增量同步。
+客户端会在发起sync命令之前发送这个REPLCONF命令，以用于确认可以开始replication流程。他有下列三个功能：
+
+- 1 slave用REPLCONF listening-port向master汇报自己的监听端口；
+- 2 master用REPLCONF GETACK要求所有的slave回复replication offset；
+- 3 slave收到REPLCONF GETACK命令后，在replconfCommand中调用replicationSendAck向master汇报REPLCONF ACK offset。
+
+目前slave仅仅用到了向master发送自己的listening port的功能，让master知道自己的监听端口，master在处理info命令时候就能告诉客户端自己的slave的监听端口。
+
+在将来的工作中，这个函数的其他功能会被调用，以方便增量同步。
 
 </font>
 
 <font color=green>
 
-	/* REPLCONF <option> <value> <option> <value> ...
-	 * This command is used by a slave in order to configure the replication
-	 * process before starting it with the SYNC command.
-	 *
-	 * Currently the only use of this command is to communicate to the master
-	 * what is the listening port of the Slave redis instance, so that the
-	 * master can accurately list slaves and their listening ports in
-	 * the INFO output.
-	 *
-	 * In the future the same command can be used in order to configure
-	 * the replication to initiate an incremental replication instead of a
-	 * full resync. */
 	void replconfCommand(redisClient *c) {
 		int j;
 
@@ -3050,9 +3054,21 @@ backlog buffer[server.repl_backlog]可以认为是一种ring buffer，几个重�
 		}
 		addReply(c,shared.ok);
 	}
+	
+</font>
+	
+####3.4.1 把slave置为online态####
+
+<font color=blue>
+
+slave处于REDIS_REPL_ONLINE状态，说明slave已经收到了rdb文件，可以增量地接受master的数据。
+
+</font>
+
+<font color=green>
 
 	/* 
-	 * 这个函数会把slave的state置为online态。当slave刚收到了rdb文件的数据时候
+	 * 这个函数会把slave的state置为online态。当slave收到了rdb文件的数据时候
 	 * 这个函数会被调用，master会准备好把更多的数据同步给slave。
 	 *
 	 * 它的工作流程是：
@@ -3078,7 +3094,304 @@ backlog buffer[server.repl_backlog]可以认为是一种ring buffer，几个重�
 
 </font>
 
-###3.5 处理同步请求[psync or sync] ### 
+####3.4.2 master的GETACK与slave的SEND ACK ####
+
+<font color=blue>
+
+>
+>beforeSleep()可以认为是redis的不定时循环函数，用于把backlog写入aof文件之类任务。它的其中一个任务就是向所有的slaves发送REPLCONF GETACK命令，以获取从的replication offset。
+>
+>slave收到REPLCONF GETACK命令后，就会调用replicationSendAck进行回复。除了收到master的命令进行被动地回复外，slave还会在周期性函数replicationCron()中主动调用replicationSendAck进行回复。
+>
+
+</font>
+
+<font color=green>
+
+master要求slave回复replication offset。
+
+</font>
+
+<font color=green>
+
+	/* This function gets called every time Redis is entering the
+	 * main loop of the event driven library, that is, before to sleep
+	 * for ready file descriptors. */
+	void beforeSleep(struct aeEventLoop *eventLoop) {
+		/* Send all the slaves an ACK request if at least one client blocked
+		 * during the previous event loop iteration. */
+		if (server.get_ack_from_slaves) {
+			robj *argv[3];
+
+			argv[0] = createStringObject("REPLCONF",8);
+			argv[1] = createStringObject("GETACK",6);
+			argv[2] = createStringObject("*",1); /* Not used argument. */
+			replicationFeedSlaves(server.slaves, server.slaveseldb, argv, 3);
+			decrRefCount(argv[0]);
+			decrRefCount(argv[1]);
+			decrRefCount(argv[2]);
+			server.get_ack_from_slaves = 0;
+		}
+	}
+
+</font>
+
+<font color=blue>
+
+slave被动或者主动向master回复replication offset。
+ 
+</font>
+
+<font color=green>
+
+	void replicationCron(void) {
+		/* Send ACK to master from time to time.
+		 * Note that we do not send periodic acks to masters that don't
+		 * support PSYNC and replication offsets. */
+		 // slave定时向master汇报replication offset
+		if (server.masterhost && server.master &&
+			!(server.master->flags & REDIS_PRE_PSYNC))
+			replicationSendAck();
+	}
+	
+	/* Send a REPLCONF ACK command to the master to inform it about the current
+	 * processed offset. If we are not connected with a master, the command has
+	 * no effects. */
+	void replicationSendAck(void) {
+		redisClient *c = server.master;
+
+		if (c != NULL) {
+			c->flags |= REDIS_MASTER_FORCE_REPLY;
+			addReplyMultiBulkLen(c,3);
+			addReplyBulkCString(c,"REPLCONF");
+			addReplyBulkCString(c,"ACK");
+			addReplyBulkLongLong(c,c->reploff);
+			c->flags &= ~REDIS_MASTER_FORCE_REPLY;
+		}
+	}
+
+</font>
+
+###3.5 处理wait命令###
+
+<font color=blue>
+
+>注意replicationRequestAckFromSlaves()函数前面有一段注释，说明了wait的原理,道出了同步数据复制的精髓：
+Redis同步数据复制的流程概括几点就是：
+
+- master有一个供PSYNC使用的全局replication offset；
+- 当master把新来的命令同步给slave的时候，它就增加这个offset；
+- slave则会实时的把自己处理的数据的offset向master进行汇报。
+
+redis新添加了一个命令wait，其格式为：WAIT <num_replicas> <milliseconds_timeout>。
+这个命令要么收到至少@num_replicas个slave返回replication offset后回复实际实际回复的slave的数目，要么在超时后会返回。
+
+Wait命令的原理就是：
+
+- 1 master每次把数据同步给slave的时候，就记录一个全局的replication offset；
+- 2 当master收到wait命令的时候，就想所有的slaves发送replconf ack命令以获取slave replication offset，在回复之前先把发送请求的client阻塞住；
+- 3 如果收到足够了的client的回复 or 超时，就给client发送reply，就给阻塞这的client回复结果。
+
+</font>
+
+####3.5.1 接收到wait命令的处理流程 ####
+
+<font color=green>
+
+	/* WAIT for N replicas to acknowledge the processing of our latest
+	 * write command (and all the previous commands). */
+	void waitCommand(redisClient *c) {
+		mstime_t timeout;
+		long numreplicas, ackreplicas;
+		long long offset = c->woff;
+
+		/* Argument parsing. */
+		if (getLongFromObjectOrReply(c,c->argv[1],&numreplicas,NULL) != REDIS_OK)
+			return;
+		if (getTimeoutFromObjectOrReply(c,c->argv[2],&timeout,UNIT_MILLISECONDS)
+			!= REDIS_OK) return;
+
+		/* First try without blocking at all. */
+		// 先计算合乎c->woff要求的slave数目，woff即wait命令执行时候master backlog
+		// 中的master_repl_offset值，如果合乎要求就直接返回。
+		ackreplicas = replicationCountAcksByOffset(c->woff);
+		if (ackreplicas >= numreplicas || c->flags & REDIS_MULTI) {
+			addReplyLongLong(c,ackreplicas);
+			return;
+		}
+
+		/* Otherwise block the client and put it into our list of clients
+		 * waiting for ack from slaves. */
+		// 把client放在处于阻塞状态等待回复的client集合中
+		c->bpop.timeout = timeout;
+		c->bpop.reploffset = offset;
+		c->bpop.numreplicas = numreplicas;
+		listAddNodeTail(server.clients_waiting_acks,c);
+		blockClient(c,REDIS_BLOCKED_WAIT);
+
+		/* Make sure that the server will send an ACK request to all the slaves
+		 * before returning to the event loop. */
+		// 向所有的slave发送replconf getack命令，具体流程见replconfCommand()函数
+		replicationRequestAckFromSlaves();
+	}
+	
+	/* Return the number of slaves that already acknowledged the specified
+	 * replication offset. */
+	// 计算已经回复ack的client的个数
+	int replicationCountAcksByOffset(long long offset) {
+		listIter li;
+		listNode *ln;
+		int count = 0;
+
+		listRewind(server.slaves,&li);
+		while((ln = listNext(&li))) {
+			redisClient *slave = ln->value;
+
+			if (slave->replstate != REDIS_REPL_ONLINE) continue;
+			if (slave->repl_ack_off >= offset) count++;
+		}
+		return count;
+	}
+
+	/* Block a client for the specific operation type. Once the REDIS_BLOCKED
+	 * flag is set client query buffer is not longer processed, but accumulated,
+	 * and will be processed when the client is unblocked. */
+	// 设置客户端的状态为BLOCKED，如此它后面的命令便不会再被处理
+	void blockClient(redisClient *c, int btype) {
+	    c->flags |= REDIS_BLOCKED;
+	    c->btype = btype;
+	    server.bpop_blocked_clients++;
+	}
+
+	/* ----------------------- SYNCHRONOUS REPLICATION --------------------------
+	 * Redis synchronous replication design can be summarized in points:
+	 *
+	 * - Redis masters have a global replication offset, used by PSYNC.
+	 * - Master increment the offset every time new commands are sent to slaves.
+	 * - Slaves ping back masters with the offset processed so far.
+	 *
+	 * So synchronous replication adds a new WAIT command in the form:
+	 *
+	 *   WAIT <num_replicas> <milliseconds_timeout>
+	 *
+	 * That returns the number of replicas that processed the query when
+	 * we finally have at least num_replicas, or when the timeout was
+	 * reached.
+	 *
+	 * The command is implemented in this way:
+	 *
+	 * - Every time a client processes a command, we remember the replication
+	 *   offset after sending that command to the slaves.
+	 * - When WAIT is called, we ask slaves to send an acknowledgement ASAP.
+	 *   The client is blocked at the same time (see blocked.c).
+	 * - Once we receive enough ACKs for a given offset or when the timeout
+	 *   is reached, the WAIT command is unblocked and the reply sent to the
+	 *   client.
+	 */
+
+	/* This just set a flag so that we broadcast a REPLCONF GETACK command
+	 * to all the slaves in the beforeSleep() function. Note that this way
+	 * we "group" all the clients that want to wait for synchronouns replication
+	 * in a given event loop iteration, and send a single GETACK for them all. */
+	// 设置server.get_ack_from_slaves值为1，beforeSleep()函数检测到这个值就会向
+	// 向slaves发送REPLCONF GETACK命令
+	void replicationRequestAckFromSlaves(void) {
+		server.get_ack_from_slaves = 1;
+	}
+
+</font>
+
+####3.5.2 处理等待wait回复的客户端 ####
+
+<font color=green>
+
+	void beforeSleep(struct aeEventLoop *eventLoop) {
+	    /* Unblock all the clients blocked for synchronous replication
+	     * in WAIT. */
+	    if (listLength(server.clients_waiting_acks))
+	        processClientsWaitingReplicas();
+	
+	    /* Try to process pending commands for clients that were just unblocked. */
+	    if (listLength(server.unblocked_clients))
+	        processUnblockedClients();
+	}
+
+
+	/* Check if there are clients blocked in WAIT that can be unblocked since
+	 * we received enough ACKs from slaves. */
+	// 查验所有阻塞等待WAIT命令回复的客户端，如果已经收到足够ACK的客户端的数目，就把他们变成unblocked状态。 
+	void processClientsWaitingReplicas(void) {
+	    long long last_offset = 0;
+	    int last_numreplicas = 0;
+	
+	    listIter li;
+	    listNode *ln;
+	
+	    listRewind(server.clients_waiting_acks,&li);
+	    while((ln = listNext(&li))) {
+	        redisClient *c = ln->value;
+	
+	        /* Every time we find a client that is satisfied for a given
+	         * offset and number of replicas, we remember it so the next client
+	         * may be unblocked without calling replicationCountAcksByOffset()
+	         * if the requested offset / replicas were equal or less. */
+			// last_offset为上一个client的处于阻塞状态时的reploffset
+			// last_numreplicas为上一个client得到ack的client的数目
+			// 条件"last_offset > c->bpop.reploffset"说明前一个客户端要求的offset大于当前客户端要求的offset
+	        if (last_offset && last_offset > c->bpop.reploffset &&
+	                           last_numreplicas > c->bpop.numreplicas)
+	        {
+	            unblockClient(c);
+	            addReplyLongLong(c,last_numreplicas);
+	        } else {
+	            int numreplicas = replicationCountAcksByOffset(c->bpop.reploffset);
+	
+	            if (numreplicas >= c->bpop.numreplicas) {
+	                last_offset = c->bpop.reploffset;
+	                last_numreplicas = numreplicas;
+	                unblockClient(c);
+	                addReplyLongLong(c,numreplicas);
+	            }
+	        }
+	    }
+	}
+
+	
+
+</font>
+
+	/* Unblock a client calling the right function depending on the kind
+	 * of operation the client is blocking for. */
+	void unblockClient(redisClient *c) {
+	    if (c->btype == REDIS_BLOCKED_LIST) {
+	        unblockClientWaitingData(c);
+	    } else if (c->btype == REDIS_BLOCKED_WAIT) {
+	        unblockClientWaitingReplicas(c);
+	    } else {
+	        redisPanic("Unknown btype in unblockClient().");
+	    }
+	    /* Clear the flags, and put the client in the unblocked list so that
+	     * we'll process new commands in its query buffer ASAP. */
+	    c->flags &= ~REDIS_BLOCKED;
+	    c->flags |= REDIS_UNBLOCKED;
+	    c->btype = REDIS_BLOCKED_NONE;
+	    server.bpop_blocked_clients--;
+	    listAddNodeTail(server.unblocked_clients,c);
+	}
+	
+	/* This function gets called when a blocked client timed out in order to
+	 * send it a reply of some kind. */
+	void replyToBlockedClientTimedOut(redisClient *c) {
+	    if (c->btype == REDIS_BLOCKED_LIST) {
+	        addReply(c,shared.nullmultibulk);
+	    } else if (c->btype == REDIS_BLOCKED_WAIT) {
+	        addReplyLongLong(c,replicationCountAcksByOffset(c->bpop.reploffset));
+	    } else {
+	        redisPanic("Unknown btype in replyToBlockedClientTimedOut().");
+	    }
+	}
+
+###3.6 处理同步请求[psync or sync] ### 
 
 <font color=blue>
 
@@ -3252,7 +3565,7 @@ backlog buffer[server.repl_backlog]可以认为是一种ring buffer，几个重�
 
 </font>
 
-####3.5.1 增量同步 ####
+####3.6.1 增量同步 ####
 
 <font color=blue>
 
@@ -3376,7 +3689,7 @@ backlog buffer[server.repl_backlog]可以认为是一种ring buffer，几个重�
 
 </font>
 
-#####3.5.1.1 增量同步backlog内的数据给某个的slave  #####
+#####3.6.1.1 增量同步backlog内的数据给某个的slave  #####
 
 <font color=green>
 
@@ -4056,7 +4369,7 @@ master的周期性任务如下：
 
 <font color=red>
 
-!!!!注意：这里只需要把数据同步到磁盘即可，至于何时把数据同步给slaves，可参见/** 3.5 处理同步请求[psync or sync] **/一节的函数syncCommand()。
+!!!!注意：这里只需要把数据同步到磁盘即可，至于何时把数据同步给slaves，可参见/** 3.6 处理同步请求[psync or sync] **/一节的函数syncCommand()。
 
 </font>
 
@@ -4282,6 +4595,7 @@ master的周期性任务如下：
 ###3.7 其他周期性任务###
 
 <font color=green>
+
 	int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 		/* Check if a background saving or AOF rewrite in progress terminated. */
 		// 检查后台任务[rdb or aof]是否结束
