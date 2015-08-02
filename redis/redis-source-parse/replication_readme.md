@@ -2135,10 +2135,8 @@ redis的timer响应函数ServerCron每秒调用一次replication的周期函数r
             freeClient(c);
             return;
         }
-        printf("readQueryFromClient call processInlineBuffer start\n");
         // 像处理client请求那样处理收到的数据
         processInputBuffer(c);
-        printf("readQueryFromClient call processInlineBuffer over\n");
         server.current_client = NULL;
     }
 
