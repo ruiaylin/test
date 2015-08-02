@@ -3196,6 +3196,16 @@ Wait命令的原理就是：
 
 ####3.5.1 接收到wait命令的处理流程 ####
 
+<font color=blue>
+
+waitCommand流程：
+
+- 1 收到命令时，直接计算合乎c->woff要求的slave数目，如果合乎要求就返回
+- 2 把{timeout, offset, numreplicas}三个参数放入c的bpop中，并把c放入server.clients_waiting_acks等待集合中，并置状态为REDIS_BLOCKED_WAIT；
+- 3 向master的所有slave发出REPCONF GETACK命令，以获取slave的offset。
+
+</font>
+
 <font color=green>
 
 	/* WAIT for N replicas to acknowledge the processing of our latest
@@ -3294,7 +3304,8 @@ Wait命令的原理就是：
 	 * we "group" all the clients that want to wait for synchronouns replication
 	 * in a given event loop iteration, and send a single GETACK for them all. */
 	// 设置server.get_ack_from_slaves值为1，beforeSleep()函数检测到这个值就会向
-	// 向slaves发送REPLCONF GETACK命令
+	// 向slaves发送REPLCONF GETACK命令，具体流程可参加/** 3.4.2 master的GETACK
+	// 与slave的SEND ACK **/的函数beforeSleep()
 	void replicationRequestAckFromSlaves(void) {
 		server.get_ack_from_slaves = 1;
 	}
@@ -3302,6 +3313,18 @@ Wait命令的原理就是：
 </font>
 
 ####3.5.2 处理等待wait回复的客户端 ####
+
+<font color=blue>
+
+master向slave发出REPLCONF GETACK命令后，slave会向master回复结果，详细结果请参加/** 3.4.2 master的GETACK与slave的SEND ACK **/一节。
+master发出命令后的流程是：
+
+- 1 在beforeSleep()中循环地调用processClientsWaitingReplicas()检查处于REDIS_BLOCKED_WAIT状态的client；
+- 2 如果已经有足够数目的满足条件的slaves，processClientsWaitingReplicas()->unblockClient()->unblockClient()把client从等待队列server.clients_waiting_acks中删除掉放于处于非阻塞状态的client集合server.unblocked_clients，并且把client置于REDIS_UNBLOCKED状态，processClientsWaitingReplicas()把numreplicas放入client的reply buffer中;
+- 3 在beforeSleep()中循环地调用processUnblockedClients()检查server.unblocked_clients集合中的client，当client中有待发送出去的数据时候，就调用processInputBuffer()函数把数据发送出去；
+- 4 serverCron()->clientsCron()->clientsCronHandleTimeout()->replyToBlockedClientTimedOut()循环检查server.clients中处于REDIS_BLOCKED_WAIT状态的client，给client回复当前的返回ack的client的数目，最后调用serverCron()->clientsCron()->clientsCronHandleTimeout()->unblockClient()删除掉放于处于非阻塞状态的client集合server.unblocked_clients，并且把client置于REDIS_UNBLOCKED状态。
+
+</font>
 
 <font color=green>
 
@@ -3337,7 +3360,13 @@ Wait命令的原理就是：
 	         * if the requested offset / replicas were equal or less. */
 			// last_offset为上一个client的处于阻塞状态时的reploffset
 			// last_numreplicas为上一个client得到ack的client的数目
-			// 条件"last_offset > c->bpop.reploffset"说明前一个客户端要求的offset大于当前客户端要求的offset
+			//
+			// 条件"last_offset > c->bpop.reploffset"说明前面客户
+			// 端要求的offset大于当前客户端要求的offset，
+			//
+			// 条件"last_numreplicas > c->bpop.numreplicas"说明前一
+			// 个客户端计算的有ack回复的客户端数目大于当前客户端要求的numreplicas
+			//
 	        if (last_offset && last_offset > c->bpop.reploffset &&
 	                           last_numreplicas > c->bpop.numreplicas)
 	        {
@@ -3355,10 +3384,6 @@ Wait命令的原理就是：
 	        }
 	    }
 	}
-
-	
-
-</font>
 
 	/* Unblock a client calling the right function depending on the kind
 	 * of operation the client is blocking for. */
@@ -3379,6 +3404,113 @@ Wait命令的原理就是：
 	    listAddNodeTail(server.unblocked_clients,c);
 	}
 	
+	/* This is called by unblockClient() to perform the blocking op type
+	 * specific cleanup. We just remove the client from the list of clients
+	 * waiting for replica acks. Never call it directly, call unblockClient()
+	 * instead. */
+	void unblockClientWaitingReplicas(redisClient *c) {
+		listNode *ln = listSearchKey(server.clients_waiting_acks,c);
+		redisAssert(ln != NULL);
+		listDelNode(server.clients_waiting_acks,ln);
+	}
+	
+	/* This function is called in the beforeSleep() function of the event loop
+	 * in order to process the pending input buffer of clients that were
+	 * unblocked after a blocking operation. */
+	void processUnblockedClients(void) {
+		listNode *ln;
+		redisClient *c;
+
+		while (listLength(server.unblocked_clients)) {
+			ln = listFirst(server.unblocked_clients);
+			redisAssert(ln != NULL);
+			c = ln->value;
+			listDelNode(server.unblocked_clients,ln);
+			c->flags &= ~REDIS_UNBLOCKED;
+
+			/* Process remaining data in the input buffer. */
+			if (c->querybuf && sdslen(c->querybuf) > 0) {
+				server.current_client = c;
+				processInputBuffer(c);
+				server.current_client = NULL;
+			}
+		}
+	}
+
+</font>
+
+#####3.5.2.1 处理超时的等待WAIT返回的客户端 #####
+
+<font color=green>
+
+	int serverCron() {
+		/* We need to do a few operations on clients asynchronously. */
+		clientsCron();
+	}
+
+	void clientsCron(void) {
+		/* Make sure to process at least 1/(server.hz*10) of clients per call.
+		 * Since this function is called server.hz times per second we are sure that
+		 * in the worst case we process all the clients in 10 seconds.
+		 * In normal conditions (a reasonable number of clients) we process
+		 * all the clients in a shorter time. */
+		int numclients = listLength(server.clients);
+		int iterations = numclients/(server.hz*10);
+
+		if (iterations < 50)
+			iterations = (numclients < 50) ? numclients : 50;
+		while(listLength(server.clients) && iterations--) {
+			redisClient *c;
+			listNode *head;
+
+			/* Rotate the list, take the current head, process.
+			 * This way if the client must be removed from the list it's the
+			 * first element and we don't incur into O(N) computation. */
+			listRotate(server.clients);
+			head = listFirst(server.clients);
+			c = listNodeValue(head);
+			/* The following functions do different service checks on the client.
+			 * The protocol is that they return non-zero if the client was
+			 * terminated. */
+			if (clientsCronHandleTimeout(c)) continue;
+			if (clientsCronResizeQueryBuffer(c)) continue;
+		}
+	}
+	
+	/* Check for timeouts. Returns non-zero if the client was terminated */
+	int clientsCronHandleTimeout(redisClient *c) {
+		time_t now = server.unixtime;
+
+		if (server.maxidletime &&
+			!(c->flags & REDIS_SLAVE) &&    /* no timeout for slaves */
+			!(c->flags & REDIS_MASTER) &&   /* no timeout for masters */
+			!(c->flags & REDIS_BLOCKED) &&  /* no timeout for BLPOP */
+			!(c->flags & REDIS_PUBSUB) &&   /* no timeout for Pub/Sub clients */
+			(now - c->lastinteraction > server.maxidletime))
+		{
+			redisLog(REDIS_VERBOSE,"Closing idle client");
+			freeClient(c);
+			return 1;
+		} else if (c->flags & REDIS_BLOCKED) {
+			/* Blocked OPS timeout is handled with milliseconds resolution.
+			 * However note that the actual resolution is limited by
+			 * server.hz. */
+			mstime_t now_ms = mstime();
+
+			if (c->bpop.timeout != 0 && c->bpop.timeout < now_ms) {
+				/* Handle blocking operation specific timeout. */
+				replyToBlockedClientTimedOut(c);
+				unblockClient(c);
+			} else if (server.cluster_enabled) {
+				/* Cluster: handle unblock & redirect of clients blocked
+				 * into keys no longer served by this server. */
+				if (clusterRedirectBlockedClientIfNeeded(c))
+					unblockClient(c);
+			}
+		}
+		return 0;
+	}
+
 	/* This function gets called when a blocked client timed out in order to
 	 * send it a reply of some kind. */
 	void replyToBlockedClientTimedOut(redisClient *c) {
@@ -3391,6 +3523,8 @@ Wait命令的原理就是：
 	    }
 	}
 
+</font>
+	
 ###3.6 处理同步请求[psync or sync] ### 
 
 <font color=blue>
