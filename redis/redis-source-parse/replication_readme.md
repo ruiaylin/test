@@ -3441,6 +3441,12 @@ master发出命令后的流程是：
 
 #####3.5.2.1 处理超时的等待WAIT返回的客户端 #####
 
+<font color=blue>
+
+clientsCron()函数一次最多检查50个的客户端。
+
+</font>
+
 <font color=green>
 
 	int serverCron() {
@@ -3703,10 +3709,11 @@ master发出命令后的流程是：
 
 <font color=blue>
 
-处理客户端的PSYNC命令，如果能够进行增量同步则调用函数addReplyReplicationBacklog进行数据增量同步，否则：
+处理客户端的PSYNC命令，如果能够进行增量同步则调用函数addReplyReplicationBacklog进行数据增量同步，否则若请求参数处于下列情形之一：
 1) 请求的runid与master的runid不符合；
 2) backlog还没有被创建出来；
 3) 增量请求的offset不合法，即offset不在(server.repl_backlog_off，server.repl_backlog_histlen)内；
+则不处理客户端的请求。
 
 增量同步的详细流程：
 1) 设置client的flag为slave，设置state为REDIS_REPL_ONLINE，放在server.slaves集合中；
@@ -3887,8 +3894,7 @@ master发出命令后的流程是：
 
 </font>
 
-
-###3.6 replication 周期性任务 ###
+###3.7 replication 周期性任务 ###
 
 <font color=blue>
 
@@ -4062,7 +4068,7 @@ master的周期性任务如下：
 	
 </font>
 
-###3.6.1 启动BASAVE进程 ###
+###3.7.1 启动BASAVE进程 ###
 
 <font color=green>
 
@@ -4090,7 +4096,7 @@ master的周期性任务如下：
 	
 </font>	
 
-####3.6.1.1 无盘数据同步 ####
+####3.7.1.1 无盘数据同步 ####
 
 <font color=blue>
 
@@ -4248,7 +4254,7 @@ master的周期性任务如下：
 		return REDIS_OK; /* unreached */
 	}
 
-#####3.6.1.1.1 无盘数据同步时创建redis I/O通道 #####		
+#####3.7.1.1.1 无盘数据同步时创建redis I/O通道 #####		
 	
 <font color=blue>	
 	
@@ -4367,7 +4373,7 @@ master的周期性任务如下：
 
 </font>
 	
-#####3.6.1.1.2 无盘方式同步数据 #####	
+#####3.7.1.1.2 无盘方式同步数据 #####	
 	
 <font color=blue>
 
@@ -4499,7 +4505,7 @@ master的周期性任务如下：
 	
 </font>
 
-####3.6.1.2 把内存的数据序列化到磁盘 ####
+####3.7.1.2 把内存的数据序列化到磁盘 ####
 
 <font color=red>
 
@@ -4615,7 +4621,7 @@ master的周期性任务如下：
 
 </font>
 
-####3.6.1.2.1 依赖rdb文件数据同步时创建redis I/O通道 ####
+####3.7.1.2.1 依赖rdb文件数据同步时创建redis I/O通道 ####
 
 <font color=green>
 
@@ -4673,7 +4679,7 @@ master的周期性任务如下：
 
 </font>
 
-###3.6.2 核验处于良好连接状态的slave的数目 ###	
+###3.7.2 核验处于良好连接状态的slave的数目 ###	
 
 <font color=blue>
 
@@ -4726,7 +4732,7 @@ master的周期性任务如下：
 	
 </font>
 
-###3.7 其他周期性任务###
+###3.8 其他周期性任务###
 
 <font color=green>
 
@@ -4812,7 +4818,7 @@ master的周期性任务如下：
 
 </font>
 
-####3.7.1 检查后台任务完成进度 ####
+####3.8.1 检查后台任务完成进度 ####
 
 <font color=green>
 
@@ -4833,7 +4839,7 @@ master的周期性任务如下：
 	
 </font>
 
-#####3.7.1.1 检查有盘方式下BGSAVE后台任务完成进度 #####
+#####3.8.1.1 检查有盘方式下BGSAVE后台任务完成进度 #####
 
 <font color=green>
 
@@ -4879,7 +4885,7 @@ master的周期性任务如下：
 
 </font>
 
-#####3.7.1.2 检查无盘方式下REPLICATION任务完成进度 #####
+#####3.8.1.2 检查无盘方式下REPLICATION任务完成进度 #####
 
 <font color=green>
 
@@ -4973,7 +4979,7 @@ master的周期性任务如下：
 
 </font>
 
-#####3.7.1.3 检查完毕后更新相应slave的状态 #####
+#####3.8.1.3 检查完毕后更新相应slave的状态 #####
 
 <font color=blue>
 
@@ -5164,14 +5170,17 @@ master的周期性任务如下：
 
 ![](./pic/redis_replication.png)
 
+from:http://www.hoterran.info/redis_replication
+
 ###4.3 replication过程中slave与master的状态变化图###
 
 ![](./pic/redis_replication_interactive.png)
 
+from:http://www.hoterran.info/redis_replication
 
 ## 参考文档：##
 
 - 1 redis/src/replication.c
 - 2 http://redis.readthedocs.org/en/latest/topic/replication.html
-- 3 http://www.360doc.com/content/11/1205/14/7936054_169834858.shtml
+- 3 http://www.hoterran.info/redis_replication
 
