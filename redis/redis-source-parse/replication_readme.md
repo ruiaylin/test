@@ -51,7 +51,7 @@
 
 ###1.1 初始化server相关参数###
 
-<font color>
+<font color=blue>
 初始化server.runid，并给replication相关参数赋值。
 </font>
 
