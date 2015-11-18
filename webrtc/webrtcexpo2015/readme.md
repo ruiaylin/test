@@ -13,7 +13,7 @@
 
 ## 客户端 ##
 
-** 文件列表 **
+**文件列表**
 
 <font color=blue>
 
@@ -388,7 +388,7 @@ step 2: http-client.js:send:
 
 ## 服务端 ##
 
-** 文件列表 **
+**文件列表**
 
 <font color=blue>
 
