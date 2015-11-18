@@ -25,12 +25,6 @@ exports.serveFilePath = setServeFilePath;
 
 var idCounter = 0;
 
-function nextUniqueId() {
-  idCounter++;
-  log('idCounter:', idCounter);
-  return idCounter.toString();
-}
-
 // Creates a handler to collect POSTed data and to route the
 // request based on the path name
 // handle其实是一个路由器句柄
