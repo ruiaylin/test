@@ -1,0 +1,91 @@
+﻿<!--
+// Copyright 2013-2014 Digital Codex LLC
+// You may use this code for your own education.  If you use it
+// largely intact, or develop something from it, don't claim that
+// your code came first.  You are using this code completely at
+// your own risk.  If you rely on it to work in any particular
+// way, you're an idiot and we won't be held responsible.
+-->
+
+<html>
+<head>
+  <meta http-equiv="Content-Type"
+        content="text/html; charset=UTF-8" />
+  <style>
+    video {
+      width:  320px;
+      height:  240px;
+      border:  1px solid black;
+    }
+    div {
+      display:  inline-block;
+    }
+  </style>
+</head>
+<body>
+
+<!-- blank script section is placeholder for query params -->
+<script></script>
+
+<!-- load polyfill, local copy first for local testing -->
+<script src="extra/adapter.js" type="text/javascript"></script>
+
+<!-- load XHR-based signaling channel that direct connects based
+     on a key -->
+<script src="http-client.js" type="text/javascript"></script>
+<script src="index.js" type="text/javascript"></script>
+
+<div id="setup">
+  <p>WebRTC Book Demo (local media, signaling, and peer connection only)</p>
+  <p>Key:
+    <input type="text" name="key" id="key"
+           onkeyup="if (event.keyCode == 13) {
+                      connect(); return false;}"/>
+    <button id="connect" onclick="connect()">Connect</button>
+    <span id="statusline" style="display:none">Status:
+      <span id="status">Disconnected</span>
+    </span>
+    <button id="call" style="display:none"
+            onclick = "call()">Call</button>
+  </p>
+</div>
+
+<div id="scMessage" style="float:right;display:none">
+  <p>Signaling channel message:
+    <input type="text" width="100%" name="message" id="message"
+           onkeyup="if (event.keyCode == 13) {
+                      send(); return false;}"/>
+    <button id="send" style="display:none"
+            onclick="send()">Send</button>
+  </p>
+
+  <p>Response:  <span id="response"></span></p>
+</div>
+
+<br/>
+
+<div style="width:30%;vertical-align:top">
+  <div>
+    <video id="myVideo" autoplay="autoplay" controls
+           muted="true"/>
+  </div>
+  <p><b>Outgoing Messages</b>
+     <br/>
+     <textarea id="outmessages" rows="100"
+               style="width:100%"></textarea>
+  </p>
+</div>
+
+<div style="width:30%;vertical-align:top">
+  <div>
+    <video id="yourVideo" autoplay="autoplay" controls />
+  </div>
+  <p><b>Incoming Messages</b>
+     <br/>
+     <textarea id="inmessages" rows="100"
+               style="width:100%"></textarea>
+  </p>
+</div>
+
+</body>
+</html>
