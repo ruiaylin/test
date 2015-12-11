@@ -46,10 +46,10 @@ public final class KetamaHash {
 	
 	// nodes: 原始物理节点
 	// CopyNum: 每个节点对应的虚拟节点数
-    public KetamaHash(List<String> nodes, int CopyNum) {
+  public KetamaHash(List<String> nodes, int CopyNum) {
 		KetamaNodeMap = new TreeMap<Long, String>();
 		
-        RepNum = CopyNum;
+    RepNum = CopyNum;
         
 		for (String node : nodes) {
 			// md5值有16Bytes，可以构造4个Integer，所以小循环四次
@@ -61,7 +61,7 @@ public final class KetamaHash {
 				}
 			}
 		}
-    }
+  }
 
 	public String GetNode(final String key) {
 		byte[] sum = CalcMd5(key);
@@ -72,7 +72,7 @@ public final class KetamaHash {
 	String GetNodeForKey(long hash) {
 		final String node;
 		Long key = hash;
-		if(!KetamaNodeMap.containsKey(key)) {
+		if (!KetamaNodeMap.containsKey(key)) {
 			SortedMap<Long, String> tailMap = KetamaNodeMap.tailMap(key);
 			if(tailMap.isEmpty()) {
 				key = KetamaNodeMap.firstKey();
