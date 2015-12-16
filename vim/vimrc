@@ -122,7 +122,6 @@ if version >= 703
 "   set cc=80,100
 endif
 
-"for c\c++
 inoremap <leader>{  {}<esc>i
 inoremap <leader>[  []<esc>i
 inoremap <leader>(  ()<esc>i
@@ -130,10 +129,616 @@ inoremap <leader>'  ''<esc>i
 inoremap <leader>"  ""<esc>i
 "for c\c++
 nmap <leader>hs q:
-autocmd FileType h,hpp,c,cc,cpp,cxx set list
-autocmd FileType h,hpp,c,cc,cpp,cxx set listchars=tab:>-,trail:-,extends:>,precedes:<,eol:$
+autocmd FileType h,hpp,c,cc,cpp,cxx,go,py set list
+autocmd FileType h,hpp,c,cc,cpp,cxx,go,py set listchars=tab:>-,trail:-,extends:>,precedes:<,eol:$
 
-autocmd FileType h,hpp,c,cc,cpp,cxx set cindent | set shiftwidth=4 | set expandtab " 用 space 代替 tab
+autocmd FileType h,hpp,c,cc,cpp,cxx,go,py set cindent | set shiftwidth=4 | set expandtab " 用 space 代替 tab
+
+" add file header
+nmap <leader>he  : call TitleDet()<CR>
+func! AddTitle()
+    if &filetype == "sh"
+		call append(0, "\#!/usr/bin/env bash")
+		call append(1, "# ******************************************************")
+		call append(2, "# DESC    : ")
+		call append(3, "# AUTHOR  : Alex Stocks")
+		call append(4, "# VERSION : 1.0")
+		call append(5, "# LICENCE : LGPL V3")
+		call append(6, "# EMAIL   : alexstocks@foxmail.com")
+		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(8, "# FILE    : ".expand("%:t"))
+		call append(9, "# ******************************************************")
+	elseif &filetype == "h" || &filetype == "hpp"
+		call append(0, "/******************************************************")
+		call append(1, "# DESC    : ")
+		call append(2, "# AUTHOR  : Alex Stocks")
+		call append(3, "# VERSION : 1.0")
+		call append(4, "# LICENCE : LGPL V3")
+		call append(5, "# EMAIL   : alexstocks@foxmail.com")
+		call append(6, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(7, "# FILE    : ".expand("%:t"))
+		call append(8, "******************************************************/")
+		call append(9, "")
+		call append(10, "#ifndef __SDK_FUNC_H__")
+		call append(11, "#define __SDK_FUNC_H__")
+		call append(12, "")
+		call append(13, "#if (defined(__cplusplus))")
+		call append(14, "    extern \"C\" {")
+		call append(15, "#endif")
+		call append(16, "")
+		call append(18, "#include <stdio.h>")
+		call append(19, "")
+		call append(21, "")
+		call append(21, "#if (defined(__cplusplus))")
+		call append(22, "    }")
+		call append(23, "#endif")
+    elseif &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+		call append(0, "/******************************************************")
+		call append(1, "# DESC    : ")
+		call append(2, "# AUTHOR  : Alex Stocks")
+		call append(3, "# VERSION : 1.0")
+		call append(4, "# LICENCE : LGPL V3")
+		call append(5, "# EMAIL   : alexstocks@foxmail.com")
+		call append(6, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(7, "# FILE    : ".expand("%:t"))
+		call append(8, "******************************************************/")
+		call append(9, "")
+		call append(10, "#if (defined(__cplusplus))")
+		call append(11, "    extern \"C\" {")
+		call append(12, "#endif")
+		call append(13, "")
+		call append(14, "#include <stdio.h>")
+		call append(15, "#include <stdlib.h>")
+		call append(16, "")
+		call append(17, "")
+		call append(18, "#if (defined(__cplusplus))")
+		call append(19, "    }")
+		call append(20, "#endif")
+    elseif &filetype == "go"
+		call append(0, "/******************************************************")
+		call append(1, "# DESC    : ")
+		call append(2, "# AUTHOR  : Alex Stocks")
+		call append(3, "# VERSION : 1.0")
+		call append(4, "# LICENCE : LGPL V3")
+		call append(5, "# EMAIL   : alexstocks@foxmail.com")
+		call append(6, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(7, "# FILE    : ".expand("%:t"))
+		call append(8, "******************************************************/")
+		call append(9, "")
+		call append(10, "package main")
+		call append(11, "")
+		call append(12, "import (")
+		call append(13, "    \"fmt\"")
+		call append(14, ")")
+		call append(15, "")
+		call append(16, "func main() {")
+		call append(17, "    fmt.Println(\"hello\", world\)")
+		call append(18, "}")
+    elseif &filetype == "python"
+		call append(0, "\#!/bin/python")
+		call append(1, "# ******************************************************")
+		call append(2, "# DESC    : ")
+		call append(3, "# AUTHOR  : Alex Stocks")
+		call append(4, "# VERSION : 1.0")
+		call append(5, "# LICENCE : LGPL V3")
+		call append(6, "# EMAIL   : alexstocks@foxmail.com")
+		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(8, "# FILE    : ".expand("%:t"))
+		call append(9, "# ******************************************************")
+	endif
+    echohl WarningMsg | echo "Successful in adding copyright." | echohl None
+endfunc
+
+func! UpdateTitle()
+     normal m'
+     execute '/# MOD/s@:.*$@\=strftime(": %Y-%m-%d %H:%M")@'
+     normal ''
+     normal mk
+	 execute '/# FILE/s@:.*$@\=": ".expand("%:t")@'
+     execute "noh"
+     normal 'k
+     echohl WarningMsg | echo "Successful in updating the copyright." | echohl None
+endfunc
+
+func! TitleDet()
+    let n=1
+    while n < 15
+        let line = getline(n)
+        if line =~ '^\#\s*\S*MOD\S*.*$'
+			call UpdateTitle()
+            return
+        endif
+        let n = n + 1
+    endwhile
+    call AddTitle()
+endfunc
+nmap <leader>he  : call TitleDet()<CR>
+
+" add function declaration
+nmap <leader>fd  : call FunctionDeclare()<CR>
+func! FunctionDeclare()
+	if &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+        call append(line(".") + 0, "/**")
+        call append(line(".") + 1, " * description    : write <br/><br/>")
+        call append(line(".") + 2, " *")
+        call append(line(".") + 3, " * in-@fd         : file decription")
+        call append(line(".") + 4, " * in-out@buf     : buffer")
+        call append(line(".") + 5, " * in-@buf_len    : buffer len")
+        call append(line(".") + 6, " *")
+        call append(line(".") + 7, " * out-@ret       : if successful, ret is 0; otherwise -1 instead.")
+        call append(line(".") + 8, " **/")
+        call append(line(".") + 9, "int func(int fd, char* buf, int buf_len);")
+    elseif &filetype == "go"
+        call append(line(".") + 0, "/**")
+        call append(line(".") + 1, " * description     : write <br/><br/>")
+        call append(line(".") + 2, " *")
+        call append(line(".") + 3, " * in-@fd          : file decription")
+        call append(line(".") + 4, " * in-out@buf      : buffer")
+        call append(line(".") + 5, " * in-@buf_len     : buffer len")
+        call append(line(".") + 6, " *")
+        call append(line(".") + 7, " * out-@err        : if successful, err is 0; err.String() instead.")
+        call append(line(".") + 8, " **/")
+        call append(line(".") + 9, "func Func(fd int, buf string, buf_len int)(err error){")
+        call append(line(".") + 10, "    fmt.Println(\"hello %T %#v\", v, v)")
+        call append(line(".") + 11, "}")
+	endif
+	normal ddW
+endfunc
+
+" add remark
+nmap <leader>re  : call Remark()<CR>
+func! Remark()
+	if &filetype == "sh"
+        call append(line(".") + 0, "#######################")
+        call append(line(".") + 1, "#")
+        call append(line(".") + 2, "#")
+        call append(line(".") + 3, "#######################")
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"  || &filetype == "go"
+        call append(line(".") + 0, "//////////////////////////////////////////")
+        call append(line(".") + 1, "//")
+        call append(line(".") + 2, "//")
+        call append(line(".") + 3, "//////////////////////////////////////////")
+    elseif &filetype == "python"
+        call append(line(".") + 0, "\"\"\"")
+        call append(line(".") + 1, "# Curl")
+        call append(line(".") + 2, "#")
+        call append(line(".") + 3, "\"\"\"")
+    endif
+	normal ddw
+endfunc
+
+" add remark
+nmap <leader>r8  : call RemarkEx()<CR>
+func! RemarkEx()
+    if &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"  || &filetype == "go"
+        call append(line(".") + 0, "/**")
+        call append(line(".") + 1, " *")
+        call append(line(".") + 2, " *")
+        call append(line(".") + 3, " *")
+        call append(line(".") + 4, " **/")
+    endif
+	normal ddw
+endfunc
+
+" add function defination
+nmap <leader>fu  : call FunctionDefine()<CR>
+func! FunctionDefine()
+	if &filetype == "sh"
+        call append(line(".") + 0, "function udp_state {")
+        call append(line(".") + 1, "    idx = 0")
+        call append(line(".") + 2, "    while [[ idx -lt $NUM ]]; do")
+        call append(line(".") + 3, "     ((idx++))")
+        call append(line(".") + 4, "    done")
+        call append(line(".") + 5, "}")
+        call append(line(".") + 6, "export -f udp_state")
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+        call append(line(".") + 0, "int func(int fd, char* buf, int buf_len)")
+        call append(line(".") + 1, "{")
+        call append(line(".") + 2, "    return 0;")
+        call append(line(".") + 3, "}")
+    elseif &filetype == "go"
+        call append(line(".") + 0, "func Func()() {")
+        call append(line(".") + 1, "    fmt.Println(\"hello %T %#v\", v, v)")
+        call append(line(".") + 2, "}")
+    elseif &filetype == "python"
+        call append(line(".") + 0, "def Curl(host, port):")
+        call append(line(".") + 1, "\"\"\" Curl \"\"\"")
+        call append(line(".") + 2, "    connection = httplib.HTTPConnection(host, port)")
+        call append(line(".") + 3, "    if not str:")
+        call append(line(".") + 4, "        logging.warn(status)")
+        call append(line(".") + 5, "        sys.exit(-1)")
+        call append(line(".") + 6, "    return json.loads(result)")
+    endif
+	normal ddW
+endfunc
+
+nmap <leader>in  : call IncludeHeader()<CR>
+nmap <leader>im  : call IncludeHeader()<CR>
+func! IncludeHeader()
+	if &filetype == "sh"
+        call append(line(".") + 0, "source ./bash.public.h")
+		normal ddW
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+        call append(line(".") + 0, "#include <>")
+        call append(line(".") + 1, "#include \"\"")
+		normal dd$
+    elseif &filetype == "go"
+        call append(line(".") + 0, "import (")
+        call append(line(".") + 1, "    \"fmt\"")
+        call append(line(".") + 2, ")")
+		normal ddj2w
+    elseif &filetype == "python"
+        call append(line(".") + 0, "import sys")
+        call append(line(".") + 1, "import os")
+        call append(line(".") + 2, "import log")
+		normal dd2jw
+    endif
+endfunc
+
+nmap <leader>co  : call Const()<CR>
+func! Const()
+    if &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+        call append(line(".") + 0, "const int value = 3;")
+		normal ddW
+    elseif &filetype == "go"
+        call append(line(".") + 0, "const (")
+        call append(line(".") + 1, "    A = 1")
+        call append(line(".") + 2, "    D = iota")
+        call append(line(".") + 3, ")")
+		normal ddjfow
+    endif
+endfunc
+
+nmap <leader>ty  : call Typedef()<CR>
+func! Typedef()
+    if &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+        call append(line(".") + 0, "typedef A   A;")
+		normal ddW
+    elseif &filetype == "go"
+        call append(line(".") + 0, "type INT int")
+		normal ddW
+    endif
+endfunc
+nmap <leader>ou  : call Output()<CR>
+func! Output()
+	if &filetype == "sh"
+		call append(line("."), "echo ${idx}")
+		normal dd3w
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+		call append(line("."), "    printf(\"%d\", idx);")
+		normal dd2w
+    elseif &filetype == "go"
+        call append(line("."), "    fmt.Println(\"Hello:\", )")
+		normal dd4w
+    elseif &filetype == "python"
+        call append(line("."), "    print(\"%s-%s\" % (v, v))")
+		normal dd2w
+    endif
+endfunc
+
+nmap <leader>if  : call ConditionIf()<CR>
+func! ConditionIf()
+	if &filetype == "sh"
+		call append(line(".") + 0, "if [ $# -gt 0 ] ; then")
+		call append(line(".") + 1, "    echo hello")
+		call append(line(".") + 2, "fi")
+		normal ddW
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+		call append(line(".") + 0, "    if (idx) {")
+		call append(line(".") + 1, "        idx;")
+		call append(line(".") + 2, "    }")
+		normal ddfo2w
+    elseif &filetype == "go"
+        call append(line(".") + 0, "    if err != nil {")
+        call append(line(".") + 1, "        fmt.Println(\"Error:\", err)")
+        call append(line(".") + 2, "        break")
+        call append(line(".") + 3, "        os.Exit(1)")
+        call append(line(".") + 4, "    }")
+		normal ddfow
+    elseif &filetype == "python"
+        call append(line(".") + 0, "    if ret != 0:")
+        call append(line(".") + 1, "        ret")
+		normal ddfow
+    endif
+endfunc
+
+nmap <leader>ia  : call ConditionAnd()<CR>
+func! ConditionAnd()
+	if &filetype == "sh"
+		call append(line(".") + 0, "if [ $# -lt 0 ] && [ -d "$dirname" ] ; then")
+		call append(line(".") + 1, "    echo hello")
+		call append(line(".") + 2, "fi")
+		normal ddW
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+		call append(line(".") + 0, "    if ((i < j) && (i == j)) {")
+		call append(line(".") + 1, "        i;")
+		call append(line(".") + 2, "    }")
+		normal ddfo2w
+    elseif &filetype == "go"
+        call append(line(".") + 0, "    if (i < j) && (i < j) {")
+        call append(line(".") + 1, "        fmt.Println(\"i:\", i)")
+        call append(line(".") + 4, "    }")
+		normal ddfow
+    elseif &filetype == "python"
+        call append(line(".") + 0, "    if (ret < 0) and (ret == 0):")
+        call append(line(".") + 1, "        ret")
+		normal ddfow
+    endif
+endfunc
+
+nmap <leader>io  : call ConditionOr()<CR>
+func! ConditionOr()
+	if &filetype == "sh"
+		call append(line(".") + 0, "if [ $# -lt 0 ] || [ -d "$dirname" ] ; then")
+		call append(line(".") + 1, "    echo hello")
+		call append(line(".") + 2, "fi")
+		normal ddW
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+		call append(line(".") + 0, "    if ((i < j) || (i == j)) {")
+		call append(line(".") + 1, "        i;")
+		call append(line(".") + 2, "    }")
+		normal ddfo2w
+    elseif &filetype == "go"
+        call append(line(".") + 0, "    if (i < j) || (i == j) {")
+        call append(line(".") + 1, "        fmt.Println(\"i:\", i)")
+        call append(line(".") + 4, "    }")
+		normal ddfow
+    elseif &filetype == "python"
+        call append(line(".") + 0, "    if (ret < 0) or (ret == 0):")
+        call append(line(".") + 1, "        ret")
+		normal ddfow
+    endif
+endfunc
+nmap <leader>el  : call ConditionElseIf()<CR>
+func! ConditionElseIf()
+	if &filetype == "sh"
+		call append(line(".") + 0, "else if [ $# -gt 0 ] ; then")
+		call append(line(".") + 1, "    echo hello")
+		call append(line(".") + 2, "else")
+		call append(line(".") + 3, "    echo hello")
+		call append(line(".") + 4, "fi")
+		normal dd2W
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+		normal o<ESC>
+		call append(line(".") + 0, "    else if (idx) {")
+		call append(line(".") + 1, "        idx;")
+		call append(line(".") + 2, "    } else {")
+		call append(line(".") + 3, "        idx;")
+		call append(line(".") + 4, "    }")
+		normal ddkJfo4w
+    elseif &filetype == "go"
+		normal o<ESC>
+		call append(line(".") + 0, "    else if idx {")
+		call append(line(".") + 1, "        idx")
+		call append(line(".") + 2, "    } else {")
+		call append(line(".") + 3, "        idx")
+		call append(line(".") + 4, "    }")
+		normal ddkJfo3W
+    elseif &filetype == "python"
+		call append(line(".") + 0, "    elif ret != 0:")
+        call append(line(".") + 1, "        ret")
+		call append(line(".") + 2, "    else:")
+		call append(line(".") + 3, "        ret")
+		normal fojW
+    endif
+endfunc
+
+nmap <leader>sw  : call ConditionSwitch()<CR>
+func! ConditionSwitch()
+	if &filetype == "sh"
+		call append(line(".") + 0, "    case $v in")
+		call append(line(".") + 1, "    mm)")
+		call append(line(".") + 2, "        date +%M;")
+		call append(line(".") + 3, "    ;;")
+		call append(line(".") + 4, "    ss)")
+		call append(line(".") + 5, "        date +%M;")
+		call append(line(".") + 6, "    ;;")
+		call append(line(".") + 7, "    *)")
+		call append(line(".") + 8, "        echo \"wrong!again!\";")
+		call append(line(".") + 9, "    ;;")
+		call append(line(".") + 10, "    esac")
+		normal ddfowl
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+		call append(line(".") + 0, "    switch () {")
+		call append(line(".") + 1, "    case : {")
+		call append(line(".") + 2, "        idx;")
+		call append(line(".") + 3, "        break;")
+		call append(line(".") + 4, "    }")
+		call append(line(".") + 5, "")
+		call append(line(".") + 6, "    default: {")
+		call append(line(".") + 7, "        idx;")
+		call append(line(".") + 8, "        break;")
+		call append(line(".") + 9, "    }")
+		call append(line(".") + 10, "    }")
+		normal ddfowl
+    elseif &filetype == "go"
+		call append(line(".") + 0, "    switch args[0] {")
+		call append(line(".") + 1, "    case \"hello\":")
+		call append(line(".") + 2, "    case \"hello\":")
+		call append(line(".") + 3, "    default:")
+		call append(line(".") + 4, "    }")
+		normal ddfowl
+    elseif &filetype == "python"
+        call append(line(".") + 0, "def jia(x,y):")
+        call append(line(".") + 1, "    print x+y")
+        call append(line(".") + 2, "")
+        call append(line(".") + 3, "def jian(x,y):")
+        call append(line(".") + 4, "    print x-y")
+        call append(line(".") + 5, "")
+        call append(line(".") + 6, "operator = {'+':jia,'-':jian}")
+        call append(line(".") + 7, "")
+        call append(line(".") + 8, "def f(x,o,y):")
+        call append(line(".") + 9, "    operator.get(o)(x,y)")
+        call append(line(".") + 10, "")
+        call append(line(".") + 11, "f(3,'+',2)")
+		normal ddW
+    endif
+endfunc
+
+nmap <leader>wh  : call LoopWhile()<CR>
+func! LoopWhile()
+	if &filetype == "sh"
+	    call append(line(".") + 0, "while true")
+	    call append(line(".") + 1, "do")
+	    call append(line(".") + 2, "    sleep 1")
+	    call append(line(".") + 3, "done")
+		normal ddw
+	elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+	    call append(line(".") + 0, "    int idx = 0;")
+        call append(line(".") + 1, "    while (idx < 20) {")
+        call append(line(".") + 2, "        idx++;")
+        call append(line(".") + 3, "    }")
+		normal ddfow
+    elseif &filetype == "go"
+		call append(line(".") + 0, "    for idx, value := range arr {")
+		call append(line(".") + 1, "        fmt.Println(idx, value)")
+		call append(line(".") + 2, "    }")
+		normal ddfow
+    elseif &filetype == "python"
+        call append(line(".") + 0, "count = 0")
+        call append(line(".") + 1, "while (count < 9):")
+        call append(line(".") + 2, "    print 'The count is:', count")
+        call append(line(".") + 3, "    count = count + 1")
+		normal ddjjfokk0
+    endif
+endfunc
+
+nmap <leader>do  : call LoopDoWhile()<CR>
+func! LoopDoWhile()
+	if &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+	    call append(line(".") + 0, "    int idx = 0;")
+        call append(line(".") + 1, "    do {")
+        call append(line(".") + 2, "        idx++;")
+        call append(line(".") + 3, "    } while(idx < 20);")
+		normal ddfow
+	endif
+endfunc
+
+nmap <leader>fo  : call LoopFor()<CR>
+func! LoopFor()
+	if &filetype == "sh"
+        call append(line(".") + 0, "for id in ${pids}")
+        call append(line(".") + 1, "do")
+        call append(line(".") + 2, "    echo hello")
+        call append(line(".") + 3, "done")
+		normal ddw
+    elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+	    call append(line(".") + 0, "    int idx = 0;")
+	    call append(line(".") + 1, "    for (idx = 0; idx < 10; idx++) {")
+        call append(line(".") + 2, "        fmt.Println(\"hello %d\", idx)")
+		call append(line(".") + 3, "    }")
+		normal ddfow
+    elseif &filetype == "go"
+	    call append(line(".") + 0, "    for idx := 0; idx < len(arr); idx++ {")
+        call append(line(".") + 1, "        fmt.Println(\"hello\", arr[idx])")
+		call append(line(".") + 2, "    }")
+		normal ddfow
+   elseif &filetype == "python"
+        call append(line(".") + 0, "    for v in arr:")
+        call append(line(".") + 1, "        v")
+		normal ddfoW
+    endif
+endfunc
+
+nmap <leader>en  : call DefineEnum()<CR>
+func! DefineEnum()
+    if &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+		call append(line(".") + 0, "typedef enum tagE {")
+        call append(line(".") + 1, "    VALUE = 0,")
+        call append(line(".") + 2, "} E;")
+		normal dd2w
+    elseif &filetype == "go"
+		call append(line(".") + 0, "type E int32")
+		call append(line(".") + 1, "")
+		call append(line(".") + 2, "const (")
+		call append(line(".") + 3, "    E_A E = 0")
+		call append(line(".") + 4, "    E_B E = 2")
+		call append(line(".") + 5, ")")
+		normal dd3jfow
+    endif
+endfunc
+
+nmap <leader>st  : call DefineStruct()<CR>
+func! DefineStruct()
+    if &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+		call append(line(".") + 0, "typedef struct st_tag {")
+        call append(line(".") + 1, "    int value;")
+        call append(line(".") + 2, "} st_t, *st_p, st_a[1];")
+		normal dd2w
+    elseif &filetype == "go"
+		call append(line(".") + 0, "type tag struct {")
+		call append(line(".") + 1, "    value int32")
+		call append(line(".") + 2, "    str string")
+		call append(line(".") + 3, "}")
+		normal ddjfokw
+    endif
+endfunc
+
+nmap <leader>cl  : call DefineClass()<CR>
+func! DefineClass()
+    if &filetype == "h" || &filetype == "hpp" || &filetype == "cpp" || &filetype == "cc"
+		call append(line(".") + 0, "/**")
+		call append(line(".") + 1, " * description   : to .<br/><br/>")
+		call append(line(".") + 2, " *")
+		call append(line(".") + 3, " * @val          : value")
+		call append(line(".") + 4, " **/")
+		call append(line(".") + 5, "class A")
+		call append(line(".") + 6, "{")
+		call append(line(".") + 7, "    public:")
+		call append(line(".") + 8, "        A();")
+		call append(line(".") + 9, "        ~A();")
+		call append(line(".") + 10, "")
+		call append(line(".") + 11, "        func();")
+		call append(line(".") + 12, "    private:")
+		call append(line(".") + 13, "        int var;")
+		call append(line(".") + 14, "};")
+		normal ddj4w
+    elseif &filetype == "go"
+        call append(line(".") + 0, "type tag interface {")
+        call append(line(".") + 1, "    Get() int")
+        call append(line(".") + 2, "    Put(value int) int")
+        call append(line(".") + 3, "}")
+		normal ddjfokw
+    elseif &filetype == "python"
+		call append(line(".") + 0, "class Father(GrandPa):")
+		call append(line(".") + 1, "    def __init__(self):")
+		call append(line(".") + 2, "    print('I\'m Father!')")
+		call append(line(".") + 3, "")
+		call append(line(".") + 4, "class Son(Father):")
+		call append(line(".") + 5, "    \"\"\" example \"\"\"")
+		call append(line(".") + 6, "    i = 12345")
+		call append(line(".") + 7, "")
+		call append(line(".") + 8, "    def __init__(self):")
+		call append(line(".") + 9, "        print('son constructor')")
+		call append(line(".") + 10, "")
+		call append(line(".") + 11, "    def sayHello(self):")
+		call append(line(".") + 12, "        return 'hello world'")
+		normal ddW
+    endif
+endfunc
+
+nmap <leader>ma  : call MainFunc()<CR>
+func! MainFunc()
+    if &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
+        call append(line(".") + 0, "int main(int argc, char** argv)")
+        call append(line(".") + 1, "{")
+        call append(line(".") + 2, "    return 0;")
+        call append(line(".") + 3, "}")
+		normal dd2jOa
+    elseif &filetype == "go"
+        call append(line(".") + 0, "func main() {")
+        call append(line(".") + 1, "    fmt.Println(\"hello %T %#v\", v, v)")
+        call append(line(".") + 2, "}")
+		normal ddjOa
+    elseif &filetype == "python"
+		call append(line(".") + 0, "if __name__ == '__main__':")
+        call append(line(".") + 1, "    cwd = os.path.dirname(os.path.realpath(__file__))")
+        call append(line(".") + 2, "    log.init_log(cwd + '/log/backup.log')")
+        call append(line(".") + 3, "    logging.info('backup starting...')")
+		normal ddjfoW
+    endif
+endfunc
+
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cn1 ichar<space>
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cn2 ishort<space>
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cn4 iint<space>
@@ -189,26 +794,8 @@ autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>crt iRET_INT(-2, "", )<Esc>hhhi
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>crp iRET_PTR(ptr, "", )<Esc>hhhi
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>crn iRET_NL("", )<Esc>hhhi
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>crv iRET_VD("", )<Esc>hhhi
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>chv i/**<CR>This program is a free software; you can redistribute it and/or modify<CR>it under the terms of the GNU General Public License as published by<CR>the Free Software Foundation; either version 2 of the License, or<CR>(at your option) any later version.<CR><BS>**/<CR><esc><CR>
-autocmd FileType c,cc,cpp,cxx nmap <leader>cma iint main(int argc, char** argv)<CR>{<CR>return 0;<CR>}<CR><ESC>4kw
-autocmd FileType h,hpp,c,cc,cpp,cxx,go nmap <leader>c/ i//////////////////////////////////////////<CR><CR><CR>////////////////////////////////////////<esc>2k$a
-autocmd FileType h,hpp,c,cc,cpp,cxx,go nmap <leader>c8 i/**<CR><CR><CR><CR><CR><CR><BS>**/<esc>5k$a<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>c3 i#include<space><><esc>
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cde i#define<tab>A<tab>1<esc>hh
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cty itypedef<tab>A<tab>A;<esc>hhh
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cen itypedef enum tagE<tab>{<CR><esc>i<tab>VALUE = 0,<CR>}E;
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cst itypedef struct st_tag<tab>{<CR><esc>i<tab>int value;<CR>} st_t, *st_p, st_a[1];
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>ccl i/**<CR><space>*<space>description<tab>:<space>to .<br/><br/><CR><space>*<CR><space>*<space>@val<tab><tab><tab>:<space>to<CR><space>**/<CR><ESC>v4k:s/\*\s\+\*/\*/g<CR>jiclass<space>A<CR>{<CR>public:<CR>A();<CR>~A();<CR><CR>func();<CR>private:<CR>int<space>var;<CR>};<CR><esc>9k<BS>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cus iusing namespace ;<esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cfd i/**<CR><space>*<space>description<tab><space>:<space>write<space><br/><br/><CR><CR><space>*<space>in-@fd<tab><tab><space><space>:<space>file<space>decription<CR><space>*<space>in-out@buf<tab><space><space><space>:<space>buffer<CR><space>*<space>in-@buf_len<tab>:<space>buffer<space>len<CR><space>*<CR><space>*<space>out-@ret<tab><tab><space><space>:<space>if<space>successful,<space>ret<space>is<space>0;<space>otherwise<space>-1<space>instead.<CR><space>**/<CR>int<space>func(int<space>fd,<space>char*<space>buf,<space>int<space>buf_len);<ESC>v8k:s/\*\s\+\*/\*/g<CR>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cfu iint func(int<space>fd,<space>char*<space>buf,<space>int<space>buf_len)<CR>{<CR>return 0;<CR>}<CR><Esc>4kw
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cfo i<tab>int idx = 0;<CR>for (idx = 0; idx < 10; idx++)<tab>{<CR><esc>i<tab><tab>idx;<CR>}<CR><Esc>v4k
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cdo i<tab>int idx = 0;<CR>do<tab>{<CR>idx++;<CR>} while(idx < 20);<CR><Esc>v4k
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cwh i<tab>int idx = 0;<CR>while (idx < 20)<tab>{<CR>idx++;<CR>}<CR><Esc>v4k
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cif i<tab>if ()<tab>{<CR>idx;<CR>}<CR><Esc>v3k
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cel i<tab>else<tab>{<CR>idx;<CR>}<CR><Esc>v3k
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cei i<tab>else if()<tab>{<CR>idx;<CR>}<CR><Esc>v3k
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>csw i<tab>switch ()<tab>{<CR><esc>i<tab>case :<tab>{<CR><esc>i<tab><tab>idx;<CR>break;<CR><esc>i<tab>}<CR><CR><esc>i<tab>case :<tab>{<CR><esc>i<tab><tab>idx;<CR>break;<CR><esc>i<tab>}<CR><CR><esc>i<tab>case :<tab>{<CR><esc>i<tab><tab>idx;<CR>break;<CR><esc>i<tab>}<CR><CR><esc>i<tab>default:<tab>{<CR><esc>i<tab><tab>idx;<CR>break;<CR><esc>i<tab>}<CR><esc>i<tab>}<esc>v20k
+autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>us iusing namespace ;<esc>i
 ""make&&errors(wrongs)
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap ew    :cw<CR>
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap ei    :cc<CR>
@@ -222,19 +809,6 @@ autocmd FileType h,hpp,c,cc,cpp,cxx nmap ed    :cnew<CR>
 autocmd FileType go autocmd BufWritePre <buffer> Fmt
 autocmd FileType go compiler go
 autocmd FileType go set shiftwidth=4 | set expandtab " 用 space 代替 tab
-autocmd FileType go nmap <leader>gpa ipackage main<esc>3h
-autocmd FileType go nmap <leader>gim iimport (<CR>"fmt"<CR>)<esc>kl
-autocmd FileType go nmap <leader>gva ivar elem int64<esc>BB
-autocmd FileType go nmap <leader>gou ifmt.Println("hello", world)<esc>3b
-autocmd FileType go nmap <leader>gty itype value int<esc>2B
-autocmd FileType go nmap <leader>gst itype tag struct {<CR>value int32<CR>str string<CR>}<esc>3kw
-autocmd FileType go nmap <leader>gin itype tag interface {<CR>Get() int<CR>Put(value int) int<CR>}<esc>3kw
-autocmd FileType go nmap <leader>gif i<tab>if idx < 3 {<CR>fmt.Println("hello", world)<CR>}<esc>kw
-autocmd FileType go nmap <leader>gfo i<tab>for idx := 0; idx < 3; idx++ {<CR>fmt.Println("hello", world)<CR>}<esc>kw
-autocmd FileType go nmap <leader>gsw i<tab>switch args[0] {<CR>case "hello":<CR>case "hello":<CR>default:<CR>}<esc>4kw
-autocmd FileType go nmap <leader>gfd i/**<CR><space>*<space>description<tab><space>:<space>write<space><br/><br/><CR><CR><space>*<space>in-@fd<tab><tab><space><space>:<space>file<space>decription<CR><space>*<space>in-out@buf<tab><space><space><space>:<space>buffer<CR><space>*<space>in-@buf_len<tab><tab>:<space>buffer<space>len<CR><space>*<CR><space>*<space>out-@err<tab><tab><space><space>:<space>if<space>successful,<space>err<space>is<space>0;<space>err.String()<space>instead.<CR><space>**/<CR>func Func(fd<space>int,<space>buf<space>string,<space>buf_len<space>int)(err error){<CR>fmt.Println("hello", world)<CR>}<ESC>v10k:s/\*\s\+\*/ \*/g<CR>6ki<space><esc>k4w
-autocmd FileType go nmap <leader>gfu ifunc Func()() {<CR>fmt.Println("hello", world)<CR>}<esc>3k2w
-autocmd FileType go nmap <leader>gma ifunc main() {<CR>fmt.Println("hello", world)<CR>}<esc>kw
 "nmap    <leader>cu    ~
 "nmap    <leader>cd    ~
 nmap    <leader>wu    gUiw
@@ -250,7 +824,7 @@ nmap    <leader>wd    guiw
 "using so file method if libabc.so is in /usr/lib: g++ -o test test.cc -labc
 map <leader>cm0 i#makefile for those who has only a excutable file <CR><CR><esc>i.SUFFIXES: .sh .h .c .cc .cpp<CR><esc>i<CR><CR><esc>iCC = g++<CR><esc>iSRCS = $(wildcard ./src/*.cc)<CR><esc>iOBJS = $(patsubst ./src/%.cc, ./obj/%.o, $(SRCS))<CR><esc>iBIN = ./bin/linux_client<CR><esc>iSRC_DIR = ./src<CR><esc>iOBJ_DIR = ./obj<CR><esc>i<CR><esc>iFLAG=-Wall -g -rdynamic -DDEBUG<CR><esc>i<CR><esc>iall:$(BIN)<CR><esc>i<CR><esc>i#$(OBJS):$(SRCS)<CR><esc>i$(OBJ_DIR)/%.o:$(SRC_DIR)/%.cc<CR><esc>i<tab>$(CC) -c $(FLAG) -o $@ $<<CR><esc>i<CR><esc>i$(BIN):$(OBJS)<CR><esc>i<tab>$(CC) $(FLAG) -o $@  $^<CR><esc>i<CR><esc>icleanobj:<CR><esc>i<tab>rm -f $(OBJS)<CR><esc>i<CR><esc>iclean:<CR><esc>i<tab> make cleanobj<CR><esc>i<tab>-rm -f $(BIN) *~<CR><esc>i<CR><esc>idisplay:<CR><esc>i<tab>@echo $(BIN)<CR><esc>i<tab>@echo $(SRCS)<CR><esc>i<tab>@echo $(OBJS)<CR><esc>i<CR><esc>
 map <leader>cm1 i#makefile for those who have many excutable files<CR><CR><esc>i.SUFFIXES: .sh .h .c .cc .cpp<CR><esc>i<CR><esc>iCXX = g++<CR><esc>iCXXFLAGS = -Wall -Werror  -fPIC -shared -D _AGENT_LARGE_VERSION_V3_<CR><esc>iCXX_MACRO =     <CR><esc>i<CR><esc>iSRC_DIR = src<CR><esc>iOBJ_DIR = obj<CR><esc>iBIN_DIR = bin<CR><esc>iBIN = get_city<CR><esc>i<CR><esc>iBASE_PATH = ../../../../base_proj/trunk/base<CR><esc>i<CR><esc>iINC_DIR = \<CR><esc>i<tab><tab>  -I./src/<tab>\<CR><esc>i<tab><tab>  -I /usr/local/mysql/include \<CR><esc>i<CR><esc>iLIB_DIR = \<CR><esc>i<tab><tab>  -L../lib \<CR><esc>i<tab><tab>  -L/usr/local/mysql/lib -lmysqlclient \<CR><esc>i<CR><esc>i<CR><esc>iall: clean debug release # strip<CR><esc>i<CR><esc>i<CR><esc>i<CR><esc>idebug release gprof:$(addprefix $(BIN_DIR)/,$(BIN))<CR><esc>i<CR><CR><esc>i$(OBJ_DIR)/%.o:$(SRC_DIR)/%.cc<CR><esc>i<tab>$(CXX) $(CXXFLAGS) $(CXX_MACRO) -o $@ $(INC_DIR) -c $<<CR><esc>i<CR><esc>i$(BIN_DIR)/get_city:$(addprefix $(OBJ_DIR)/, loca_conv.o get_city.o)<CR><esc>i<tab>$(CXX) $(CXXFLAGS) $(CXX_MACRO) -o $@ $^ $(LIB_DIR) <CR><esc>i<CR><esc>i<CR><esc>istrip:<CR><esc>i<tab>strip $(addprefix $(BIN_DIR)/,$(BINARY))<CR><esc>i<CR><esc>iclean:<CR><esc>i<tab>rm -f $(addprefix $(BIN_DIR)/,$(BIN)) $(OBJ_DIR)/*.o<CR><esc>i<CR><esc>i<CR><esc>isync:<CR><esc>i<tab>rsync -azvc $(BIN_DIR)/*  rsync://10.133.2.206:49000/client_cgi/cgi-bin/<CR><esc>i<CR><esc>iinstall:<CR><esc>i<tab>cp $(./bin/$(BIN)) ../qun.qq.com/cgi-bin/ <CR><esc>i<tab>cp qun.ini ../qun.qq.com/cgi-bin/ <CR><esc>i<CR><esc>
-map <leader>cm 2 i#makefile for those has only one excutable file <CR><CR><esc>i.SUFFIXES: .sh .h .c .cc .cpp<CR><CR>GAME=tetris<CR><esc>iCC = g++<CR><esc>i<CR><esc>iSRCS=$(shell ls *.cc)<CR><esc>iOBJS=$(SRCS:.cc=.o)<CR><esc>i<CR><esc>iall:$(GAME) cleanobj<CR><esc>i<CR><esc>i$(OBJS):%.o:%.cc<CR><esc>i<tab>@echo Compiling... $@<CR><esc>i<tab>$(CC) -g -c $<<CR><esc>i$(GAME): $(OBJS)<CR><esc>i<tab>$(CC) -g -o $@ $(OBJS) -lpthread -lrt<CR><esc>icleanobj:<CR><esc>i<tab>-rm -f $(OBJS)<CR><esc>iclean:<CR><esc>i<tab>-rm -f $(OBJS) $(GAME)<CR><esc>i<CR><esc>
+map <leader>cm2 i#makefile for those has only one excutable file <CR><CR><esc>i.SUFFIXES: .sh .h .c .cc .cpp<CR><CR>GAME=tetris<CR><esc>iCC = g++<CR><esc>i<CR><esc>iSRCS=$(shell ls *.cc)<CR><esc>iOBJS=$(SRCS:.cc=.o)<CR><esc>i<CR><esc>iall:$(GAME) cleanobj<CR><esc>i<CR><esc>i$(OBJS):%.o:%.cc<CR><esc>i<tab>@echo Compiling... $@<CR><esc>i<tab>$(CC) -g -c $<<CR><esc>i$(GAME): $(OBJS)<CR><esc>i<tab>$(CC) -g -o $@ $(OBJS) -lpthread -lrt<CR><esc>icleanobj:<CR><esc>i<tab>-rm -f $(OBJS)<CR><esc>iclean:<CR><esc>i<tab>-rm -f $(OBJS) $(GAME)<CR><esc>i<CR><esc>
 "inoremap ,. <BS><Esc>   "instead of <Esc>
 
 map Q gq
@@ -264,7 +838,7 @@ nmap    <leader>di    :%s/if(/if (/g<CR>
 nmap    <leader>df    :%s/for(/for (/g<CR>
 nmap    <leader>dw    :%s/while(/while (/g<CR>
 "vim-diff
-set        diffopt=context:14
+set     diffopt=context:14
 nmap    <leader>dp    [c    ""pre diff
 nmap    <leader>dn    ]c    ""next diff
 nmap    <leader>dfp    dp    ""put diff
@@ -476,125 +1050,6 @@ endfunc
 nmap <leader>nnu :call InsertLineNum()<CR>  "可以把下列命令放入脚本文件.ins_line_num, 执行命令":so .ins_line_num"即可
 func! InsertLineNum()
     1,$s/^[0-9]\{1,}\s\+//g     "\s\+ space
-endfunc
-
-" add file header
-nmap <leader>he  : call TitleDet()<CR>
-func! AddTitle()
-    if &filetype == "sh"
-		call append(0, "\#!/usr/bin/env bash")
-		call append(1, "# ******************************************************")
-		call append(2, "# DESC    : ")
-		call append(3, "# AUTHOR  : Alex Stocks")
-		call append(4, "# VERSION : 1.0")
-		call append(5, "# LICENCE : LGPL V3")
-		call append(6, "# EMAIL   : alexstocks@foxmail.com")
-		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
-		call append(8, "# FILE    : ".expand("%:t"))
-		call append(9, "# ******************************************************")
- elseif &filetype == "h" || &filetype == "hpp"
-		call append(0, "/******************************************************")
-		call append(1, "# DESC    : ")
-		call append(2, "# AUTHOR  : Alex Stocks")
-		call append(3, "# VERSION : 1.0")
-		call append(4, "# LICENCE : LGPL V3")
-		call append(5, "# EMAIL   : alexstocks@foxmail.com")
-		call append(6, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
-		call append(7, "# FILE    : ".expand("%:t"))
-		call append(8, "******************************************************/")
-		call append(9, "")
-		call append(10, "#ifndef __SDK_FUNC_H__")
-		call append(11, "#define __SDK_FUNC_H__")
-		call append(12, "")
-		call append(13, "#if (defined(__cplusplus))")
-		call append(14, "    extern \"C\" {")
-		call append(15, "#endif")
-		call append(16, "")
-		call append(18, "#include <stdio.h>")
-		call append(19, "")
-		call append(21, "")
-		call append(21, "#if (defined(__cplusplus))")
-		call append(22, "    }")
-		call append(23, "#endif")
-    elseif &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
-		call append(0, "/******************************************************")
-		call append(1, "# DESC    : ")
-		call append(2, "# AUTHOR  : Alex Stocks")
-		call append(3, "# VERSION : 1.0")
-		call append(4, "# LICENCE : LGPL V3")
-		call append(5, "# EMAIL   : alexstocks@foxmail.com")
-		call append(6, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
-		call append(7, "# FILE    : ".expand("%:t"))
-		call append(8, "******************************************************/")
-		call append(9, "")
-		call append(10, "#if (defined(__cplusplus))")
-		call append(11, "    extern \"C\" {")
-		call append(12, "#endif")
-		call append(13, "")
-		call append(14, "#include <stdio.h>")
-		call append(15, "#include <stdlib.h>")
-		call append(16, "")
-		call append(17, "")
-		call append(18, "#if (defined(__cplusplus))")
-		call append(19, "    }")
-		call append(20, "#endif")
-    elseif &filetype == "go"
-		call append(0, "/******************************************************")
-		call append(1, "# DESC    : ")
-		call append(2, "# AUTHOR  : Alex Stocks")
-		call append(3, "# VERSION : 1.0")
-		call append(4, "# LICENCE : LGPL V3")
-		call append(5, "# EMAIL   : alexstocks@foxmail.com")
-		call append(6, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
-		call append(7, "# FILE    : ".expand("%:t"))
-		call append(8, "******************************************************/")
-		call append(9, "")
-		call append(10, "package main")
-		call append(11, "")
-		call append(12, "import (")
-		call append(13, "    \"fmt\"")
-		call append(14, ")")
-		call append(15, "")
-		call append(16, "func main() {")
-		call append(17, "    fmt.Println(\"hello\", world\)")
-		call append(18, "}")
-	else
-		call append(0, "\#!/bin/python")
-		call append(1, "# ******************************************************")
-		call append(2, "# DESC    : ")
-		call append(3, "# AUTHOR  : Alex Stocks")
-		call append(4, "# VERSION : 1.0")
-		call append(5, "# LICENCE : LGPL V3")
-		call append(6, "# EMAIL   : alexstocks@foxmail.com")
-		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
-		call append(8, "# FILE    : ".expand("%:t"))
-		call append(9, "# ******************************************************")
-	endif
-    echohl WarningMsg | echo "Successful in adding copyright." | echohl None
-endfunc
- 
-func! UpdateTitle()
-     normal m'
-     execute '/# MOD/s@:.*$@\=strftime(": %Y-%m-%d %H:%M")@'
-     normal ''
-     normal mk
-	 execute '/# FILE/s@:.*$@\=": ".expand("%:t")@'
-     execute "noh"
-     normal 'k
-     echohl WarningMsg | echo "Successful in updating the copyright." | echohl None
-endfunc
-
-func! TitleDet()
-    let n=1
-    while n < 15
-        let line = getline(n)
-        if line =~ '^\#\s*\S*MOD\S*.*$'
-			call UpdateTitle()
-            return
-        endif
-        let n = n + 1
-    endwhile
-    call AddTitle()
 endfunc
 
 "F7 save&compile
