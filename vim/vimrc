@@ -576,6 +576,7 @@ func! ConditionSwitch()
 endfunc
 
 nmap <leader>wh  : call LoopWhile()<CR>
+nmap <leader>fr  : call LoopWhile()<CR>
 func! LoopWhile()
 	if &filetype == "sh"
 	    call append(line(".") + 0, "while true")
@@ -739,61 +740,6 @@ func! MainFunc()
     endif
 endfunc
 
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cn1 ichar<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cn2 ishort<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cn4 iint<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cn8 ilong long<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnw ilong<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cu1 iunsigned char<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cu2 iunsigned short<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cu4 iunsigned int<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cu8 iunsigned long long<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cuw iunsigned long<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cf4 ifloat<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cf8 idouble<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cfw ilong double<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cvd ivoid<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cni iNULL<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnp1 ichar*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnp2 ishort* <space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnp4 iint*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnp8 ilong long*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnpw ilong*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cup1 iunsigned char*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cup2 iunsigned short*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cup4 iunsigned int*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cup8 iunsigned long long*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cupw iunsigned long*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cfp4 ifloat*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cfp8 idouble*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cfpw ilong double*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cvdp ivoid*<space>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cvpp ivoid**<space>
-
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>czr iIS_ZR()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnz iIS_NZR()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cpn iIS_PN()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnp iIS_NPN()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cmn iIS_MN()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnm iIS_NMN()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>ceq iIS_EQ()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cne iIS_NEQ()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cbe iIS_BE()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cbt iIS_BT()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnb iIS_NBE()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>clt iIS_LT()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cle iIS_LE()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cgt iIS_GT()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cge iIS_GE()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnl iIS_NL()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cnn iIS_NNL()<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cre ireturn -1<Esc>i
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>crz iRET_INT(0, nil_str)<Esc>
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cro iRET_INT(-1, "", )<Esc>hhhi
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>crt iRET_INT(-2, "", )<Esc>hhhi
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>crp iRET_PTR(ptr, "", )<Esc>hhhi
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>crn iRET_NL("", )<Esc>hhhi
-autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>crv iRET_VD("", )<Esc>hhhi
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>cde i#define<tab>A<tab>1<esc>hh
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap <leader>us iusing namespace ;<esc>i
 ""make&&errors(wrongs)
@@ -805,6 +751,12 @@ autocmd FileType h,hpp,c,cc,cpp,cxx nmap en    :cn<CR>
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap el    :cl<CR>    "list all errors
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap eu    :cold<CR>
 autocmd FileType h,hpp,c,cc,cpp,cxx nmap ed    :cnew<CR>
+
+" 文件保存的时候，保证每行末尾没有多余的space，并保证最后一行为空
+augroup prewrites
+	autocmd!
+	autocmd BufWritePre,FileWritePre * :%s/\s\+$//e | %s/\r$//e
+augroup END
 
 autocmd FileType go autocmd BufWritePre <buffer> Fmt
 autocmd FileType go compiler go
