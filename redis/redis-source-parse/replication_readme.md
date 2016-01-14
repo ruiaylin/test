@@ -5182,3 +5182,6 @@ from:http://www.hoterran.info/redis_replication
 - 2 http://redis.readthedocs.org/en/latest/topic/replication.html
 - 3 http://www.hoterran.info/redis_replication
 
+
+## 于雨氏 ##
+于雨氏[email : alexstocks@foxmail.com, qq : 362110134, wechat: alexanderstocks]在redis code基础上扒粪后有此新作。2015/07/19，于金箱堂。
