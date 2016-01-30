@@ -54,6 +54,7 @@ set selection=exclusive
 set termencoding=chinese
 "when open files
 "if has("multi_byte")
+	" set fileformats=unix,mac,dos
     set fencs=utf-8,ucs-bom,shift-jis,gb18030,gbk,gb2312,cp936,latin1 "gb2312 in unix and cp936 in windows is chinese
     "vim buffer encoding, for copy & delete
     if has("win32")
@@ -94,12 +95,14 @@ set autoread  "自动读取文件，当文件在外部被修改时
 "set leader
 let g:mapleader = "\\"
 set fillchars=vert:\ ,stl:\ ,stlnc:\  "在被分割的窗口间显示空白，便于阅读
-colorscheme evening
-if has("linux")
-    color zellner
-else
-    color desert
-endif
+"colorscheme murphy "for golang
+colorscheme evening " for c
+nmap <leader>cb :color blue<CR>
+nmap <leader>cd :color desert<CR>
+nmap <leader>ce :color evening<CR>
+nmap <leader>cm :color murphy<CR>
+"set background=light
+
 set formatoptions=tcrqn "自动格式化
 " 状态行显示的内容（包括文件类型和解码）
 set statusline=\ [File]\ %F%m%r%h%w\ [FORMAT=%{&ff}]\ [TYPE=%Y]\ [POS=%l,%v][%p%%]\ %{strftime(\"%d/%m/%y\ -\ %H:%M\")}\ %r%{CurrectDir()}%h\ %=\ [Line]%l/%L\ %=\[%P]
@@ -129,10 +132,9 @@ inoremap <leader>'  ''<esc>i
 inoremap <leader>"  ""<esc>i
 "for c\c++
 nmap <leader>hs q:
-autocmd FileType h,hpp,c,cc,cpp,cxx,go,py set list
-autocmd FileType h,hpp,c,cc,cpp,cxx,go,py set listchars=tab:>-,trail:-,extends:>,precedes:<,eol:$
-
-autocmd FileType h,hpp,c,cc,cpp,cxx,go,py set cindent | set shiftwidth=4 | set expandtab " 用 space 代替 tab
+autocmd FileType h,hpp,c,cc,cpp,cxx set list
+autocmd FileType h,hpp,c,cc,cpp,cxx set listchars=tab:>-,trail:-,extends:>,precedes:<,eol:$
+autocmd FileType h,hpp,c,cc,cpp,cxx set cindent | set shiftwidth=4 | set expandtab " 用 space 代替 tab
 
 " add file header
 nmap <leader>he  : call TitleDet()<CR>
@@ -148,7 +150,7 @@ func! AddTitle()
 		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(8, "# FILE    : ".expand("%:t"))
 		call append(9, "# ******************************************************")
-	elseif &filetype == "h" || &filetype == "hpp"
+    elseif &filetype == "h" || &filetype == "hpp"
 		call append(0, "/******************************************************")
 		call append(1, "# DESC    : ")
 		call append(2, "# AUTHOR  : Alex Stocks")
@@ -225,6 +227,28 @@ func! AddTitle()
 		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(8, "# FILE    : ".expand("%:t"))
 		call append(9, "# ******************************************************")
+    elseif &filetype == "lua"
+		call append(0, "--[[ #!/usr/bin/env lua --]]")
+		call append(1, "--------------------------------------------------------")
+		call append(2, "-- DESC    : ")
+		call append(3, "-- AUTHOR  : Alex Stocks")
+		call append(4, "-- VERSION : 1.0")
+		call append(5, "-- LICENCE : LGPL V3")
+		call append(6, "-- EMAIL   : alexstocks@foxmail.com")
+		call append(7, "-- MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(8, "-- FILE    : ".expand("%:t"))
+		call append(9, "--------------------------------------------------------")
+	else
+		call append(0, "\# nginx configure script")
+		call append(1, "# ******************************************************")
+		call append(2, "# DESC    : ")
+		call append(3, "# AUTHOR  : Alex Stocks")
+		call append(4, "# VERSION : 1.0")
+		call append(5, "# LICENCE : LGPL V3")
+		call append(6, "# EMAIL   : alexstocks@foxmail.com")
+		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(8, "# FILE    : ".expand("%:t"))
+		call append(9, "# ******************************************************")
 	endif
     echohl WarningMsg | echo "Successful in adding copyright." | echohl None
 endfunc
@@ -252,7 +276,6 @@ func! TitleDet()
     endwhile
     call AddTitle()
 endfunc
-nmap <leader>he  : call TitleDet()<CR>
 
 " add function declaration
 nmap <leader>fd  : call FunctionDeclare()<CR>
@@ -1098,20 +1121,23 @@ func!  Run()
     silent exec "!clear;"
     silent exec "!echo  Start Compiling......"
     if &filetype == "c"
-        silent exec "!echo gcc -Wall -lpthread -lrt -rdynamic -O2 -o %< %"
-        silent exec "!gcc -Wall -lpthread -lrt -rdynamic -O2 -o %< %"
+        silent exec "!echo gcc -Wall -lpthread -lrt -rdynamic -O2 -I./ -o %< %"
+        silent exec "!gcc -Wall -lpthread -lrt -rdynamic -I./ -O2 -o %< %"
     elseif &filetype == "cpp" || &filetype == "cc"
-        silent exec "!echo g++ -Wall -lpthread -lrt -rdynamic -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -O2 -o %< %"
-        silent exec "!g++ -Wall -lpthread -lrt -rdynamic -O2 -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -o %< %"
+        silent exec "!echo g++ -Wall -lpthread -lrt -rdynamic -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -I./ -O2 -o %< %"
+        silent exec "!g++ -Wall -lpthread -lrt -rdynamic -O2 -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -I./ -o %< %"
     elseif &filetype == "go"
         silent exec "!echo go run %"
         silent exec "!go run %"
     elseif &filetype == "sh"
         silent exec "!echo sh %"
         silent exec "!sh %"
-    else
+    elseif &filetype == "python"
         silent exec "!echo python %"
         silent exec "!python %"
+    elseif &filetype == "lua"
+        silent exec "!echo lua %"
+        silent exec "!lua %"
     endif
     if &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
         silent exec "!echo Compile over."
