@@ -1,0 +1,1 @@
+注意脚本httpd_run.sh开头定义了两个变量：ROOT & STATIC_ROOT
