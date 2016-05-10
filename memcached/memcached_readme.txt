@@ -1,3 +1,4 @@
+[memcache & memadmin by srouce]
 [libevent]
 unzip Libevent-release-2.0.22-stable.zip
 cd Libevent-release-2.0.22-stable/
@@ -43,7 +44,6 @@ make install
     php -i | grep ini # 查找php.ini的位置
     在php.ini中添加：extension=/usr/local/lib64/memcache.so
     
-    
 [error]
 1 httpd/logs/error_log: [Mon May 09 20:17:42 2016] [error] [client 61.129.119.185] PHP Warning:  Unknown: open(/var/lib/php/session/sess_idj0shsj27c649mgfjrkqfi6b0, O_RDWR) failed: Permission denied (13) in Unknown on line 0
 vim /etc/php.ini
@@ -61,6 +61,20 @@ vim /etc/php.ini
 
 php -c /etc/php5/cgi/php.ini test.php  
 
+[安装memadmin的第二种方法]
+1 安装 httpd & phpize
+yum install -y php # install php & httpd
+yum install -y php-devel
 
+2 安装memadmin包
+tar jxf memadmin-pkg.bz2
+cd memadmin-pkg
+cp memcache.so /usr/local/lib64/
+
+3 修改php.ini
+mkdir -p /tmp/lib/php/session
+vim /etc/php.ini
+extension=/usr/local/lib64/memcache.so
+session.save_path = "/tmp/lib/php/session"
 
 

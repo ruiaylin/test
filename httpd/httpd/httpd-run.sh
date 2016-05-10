@@ -12,10 +12,10 @@
 name="httpd"
 export ROOT=`pwd`
 export HOST=`/sbin/ifconfig -a|grep inet|grep -v 127.0.0.1|grep -v 10.|grep -v inet6|awk '{print $2}'|tr -d "addr:"`
-export STATICROOT="/home/zhaoxin/test/php/memadmin"
+export STATICROOT="${ROOT}/memadmin/"
 
 start() {
-	stop
+	# stop
 	mkdir -p run logs pid
 	$name -d ./
 	PID=`ps aux | grep -w $name | grep $USER | grep -v grep | awk '{print $2}'`
@@ -30,7 +30,7 @@ start() {
 
 stop() {
 	# ps aux | grep -w $name | grep -v grep | awk '{print $2}' | xargs kill -9
-	PID=`ps aux | grep -w $name | grep $USER | grep -v grep | awk '{print $2}'`
+	PID=`ps aux | grep -w $name | grep -v grep | awk '{print $2}'`
 	if [ "$PID" != "" ];
 	then
 		for ps in $PID
@@ -43,7 +43,6 @@ stop() {
 }
 
 clean() {
-    stop
 	rm -rf run logs pid
 }
 
