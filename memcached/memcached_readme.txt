@@ -72,9 +72,11 @@ cd memadmin-pkg
 cp memcache.so /usr/local/lib64/
 
 3 修改php.ini
+
 mkdir -p /tmp/lib/php/session
 vim /etc/php.ini
 extension=/usr/local/lib64/memcache.so
 session.save_path = "/tmp/lib/php/session"
+
 
 
