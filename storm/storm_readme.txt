@@ -109,6 +109,21 @@ delete.topic.enable=true
 http://stackoverflow.com/questions/17668262/kafka-cant-connect-to-zookeeper-fatal-fatal-error-during-kafkaserverstable-star
 http://stackoverflow.com/questions/25497279/unknownhostexception-kafka
 
+http://m.oschina.net/blog/279052:
+
+kafka会用到hostname，所以 需要修改操作系统的hostname，否者后面执行kafka的shell命令时会报 unknownhostname的异常 
+centos的hostname修改方式：
+#1 root权限
+hostname bogon
+#2 修改/etc/hosts
+127.0.0.1       localhost.localdomain localhost
+::1             localhost6.localdomain6 localhost6
+
+10.10.113.120 bogon bogon
+#3 修改/etc/sysconfig/network
+NETWORKING=yes
+NETWORKING_IPV6=no
+HOSTNAME=bogon
 
 (2) 如果delete.topic.enable没有设置为true，则删除topic时会出现下面的提示：
 linux-vt7e:~/test/java/kafka> sh bin/kafka-topics.sh --delete --zookeeper localhost:2201/kafka --topic test-kafka-topic
@@ -120,6 +135,15 @@ bin/kafka-server-stop.sh config/server.properties
 bin/kafka-server-start.sh config/server.properties
 [2016-05-12 22:51:07,545] INFO Deleting index /tmp/kafka0-oogs/test-kafka-topic-0/00000000000000000000.index (kafka.log.OffsetIndex)
 [2016-05-12 22:51:07,547] INFO Deleted log for partition [test-kafka-topic,0] in /tmp/kafka0-oogs/test-kafka-topic-0. (kafka.log.LogManager)
+
+(3) jvm的一些参数
+http://m.oschina.net/blog/279052
+jvm参数中-XX标识的是实验性参数，kafka用了很多用来优化运行的jvm参数，而你安装的 jdk所带的jvm不一定支持这些参数，比如： -XX:+UseCompressedOops 
+如果你遇到
+Unrecognized VM option '+UseCompressedOops'
+的错误，请在bin/kafka-run-class.sh中移除相关参数
+上述两个步骤比较重要。
+
 
 
 2 start
