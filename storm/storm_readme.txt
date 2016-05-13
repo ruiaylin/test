@@ -91,23 +91,68 @@ sh zkCli.sh -server localhost:2201
 0 在zk中为kafka创建路径
 ./zkCli.sh -server localhost:2201
 create /kafka ''
+ls /
 
 1 /usr/local/kafka/config/server.properties
 
 broker.id=0
+# host.name=localhost 
 port=9000
 zookeeper.connect=h1:2181,h2:2181,h3:2181/kafka
+dataDir=/tmp/data/kafka0-logs  
 log.dirs=/tmp/kafka0-logs
+delete.topic.enable=true
+
+注意：
+
+(1) host.name注释掉的原因
+http://stackoverflow.com/questions/17668262/kafka-cant-connect-to-zookeeper-fatal-fatal-error-during-kafkaserverstable-star
+http://stackoverflow.com/questions/25497279/unknownhostexception-kafka
+
+
+(2) 如果delete.topic.enable没有设置为true，则删除topic时会出现下面的提示：
+linux-vt7e:~/test/java/kafka> sh bin/kafka-topics.sh --delete --zookeeper localhost:2201/kafka --topic test-kafka-topic
+Topic test-kafka-topic is marked for deletion.
+Note: This will have no impact if delete.topic.enable is not set to true.
+
+解决方法就是把delete.topic.enable设置为true，然后重启kafka：
+bin/kafka-server-stop.sh config/server.properties 
+bin/kafka-server-start.sh config/server.properties
+[2016-05-12 22:51:07,545] INFO Deleting index /tmp/kafka0-oogs/test-kafka-topic-0/00000000000000000000.index (kafka.log.OffsetIndex)
+[2016-05-12 22:51:07,547] INFO Deleted log for partition [test-kafka-topic,0] in /tmp/kafka0-oogs/test-kafka-topic-0. (kafka.log.LogManager)
+
 
 2 start
 bin/kafka-server-start.sh config/server.properties &
 
-3 创建topic
-bin/kafka-topics.sh --create --zookeeper 116.211.15.189:2200,116.211.15.189:2201,116.211.15.189:2202/kafka --replication-factor 3 --partitions 5 --topic test-kafka-topic
+stop
+bin/kafka-server-stop.sh config/server.properties   
 
+3 创建topic
+bin/kafka-topics.sh --create --zookeeper 116.211.15.189:2201,116.211.15.189:2202,116.211.15.189:2203/kafka --replication-factor 3 --partitions 5 --topic test-kafka-topic
+
+replica数目不能大于broker数目
+bin/kafka-topics.sh --create --zookeeper localhost:2201/kafka --replication-factor 3 --partitions 5  --topic test-kafka-topic  Error while executing topic command replication factor: 3 larger than available brokers: 1
+kafka.admin.AdminOperationException: replication factor: 3 larger than available brokers: 1
+        at kafka.admin.AdminUtils$.assignReplicasToBrokers(AdminUtils.scala:70)
+        at kafka.admin.AdminUtils$.createTopic(AdminUtils.scala:171)
+        at kafka.admin.TopicCommand$.createTopic(TopicCommand.scala:93)
+        at kafka.admin.TopicCommand$.main(TopicCommand.scala:55)
+        at kafka.admin.TopicCommand.main(TopicCommand.scala)
+
+bin/kafka-topics.sh --create --zookeeper localhost:2201/kafka --replication-factor 1 --partitions 5  --topic test-kafka-topic
+[2016-05-12 22:55:24,860] WARN Partition [test-kafka-topic,4] on broker 0: No checkpointed highwatermark is found for partition [test-kafka-topic,4] (kafka.cluster.Partition)
+[2016-05-12 22:55:24,797] WARN Partition [test-kafka-topic,2] on broker 0: No checkpointed highwatermark is found for partition [test-kafka-topic,2] (kafka.cluster.Partition)
+
+上面这条日志id解释：This shouldn't be a problem. The broker logs this message when it doesn't have information about the current offset for a topic, but that is expected when the topic is new. This has since been changed to INFO level since the WARN level is misleading, but that change hasn't made it into a release yet.
+https://groups.google.com/forum/#!topic/confluent-platform/4ikdndHhIfI
 
 4 查看创建的topic
-bin/kafka-topics.sh --describe --zookeeper 116.211.15.189:2200,116.211.15.189:2201,116.211.15.189:2202/kafka  --topic test-kafka-topic
+
+sh bin/kafka-topics.sh --zookeeper localhost:2201/kafka --list
+
+bin/kafka-topics.sh --describe --zookeeper 116.211.15.189:2201,116.211.15.189:2202,116.211.15.189:2203/kafka  --topic test-kafka-topic
+
 Topic:test-kafka-topic  PartitionCount:5        ReplicationFactor:3     Configs:
         Topic: test-kafka-topic Partition: 0    Leader: 0       Replicas: 0,1,2 Isr: 0,1,2
         Topic: test-kafka-topic Partition: 1    Leader: 1       Replicas: 1,2,0 Isr: 1,2,0
@@ -131,6 +176,11 @@ consumer
 bin/kafka-console-consumer.sh --zookeeper 116.211.15.189:2200,116.211.15.189:2201,116.211.15.189:2202/kafka  --from-beginning --topic test-kafka-topic
 
 [storm]
+
+0 在zk中为storm创建路径
+./zkCli.sh -server localhost:2201
+create /storm ''
+ls /
 
 1 下载storm
 wget http://mirror.bit.edu.cn/apache/storm/apache-storm-1.0.1/apache-storm-1.0.1.tar.gz
@@ -172,4 +222,28 @@ storm kill {toponame}
 [storm+kafka]
 apache-storm-0.9.2-incubating这个版本的Storm已经自带了一个集成Kafka的外部插件程序storm-kafka，可以直接使用
 
+1 在提交Topology程序到Storm集群之前，因为用到了Kafka，需要拷贝一下依赖jar文件到Storm集群中的lib目录下面
+
+cp /usr/local/kafka/libs/kafka_2.9.2-0.8.1.1.jar /usr/local/storm/lib/
+cp /usr/local/kafka/libs/scala-library-2.9.2.jar /usr/local/storm/lib/
+cp /usr/local/kafka/libs/metrics-core-2.2.0.jar /usr/local/storm/lib/
+cp /usr/local/kafka/libs/snappy-java-1.0.5.jar /usr/local/storm/lib/
+cp /usr/local/kafka/libs/zkclient-0.3.jar /usr/local/storm/lib/
+cp /usr/local/kafka/libs/log4j-1.2.15.jar /usr/local/storm/lib/
+cp /usr/local/kafka/libs/slf4j-api-1.7.2.jar /usr/local/storm/lib/
+cp /usr/local/kafka/libs/jopt-simple-3.2.jar /usr/local/storm/lib/
+
+2 执行测试程序
+
+bin/storm jar test/friend-recommend-0.0.1.jar im.youni.friend_recommend.MyKafkaTopology 116.211.15.189
+
+可以通过查看日志文件（logs/目录下）或者Storm UI来监控Topology的运行状况。如果程序没有错误，可以使用前面我们使用的Kafka Producer来生成消息，就能看到我们开发的Storm Topology能够实时接收到并进行处理。
+上面Topology实现代码中，有一个很关键的配置对象SpoutConfig，配置属性如下所示：
+
+spoutConf.forceFromStart = false;
+
+该配置是指，如果该Topology因故障停止处理，下次正常运行时是否从Spout对应数据源Kafka中的该订阅Topic的起始位置开始读取，如果forceFromStart=true，则之前处理过的Tuple还要重新处理一遍，否则会从上次处理的位置继续处理，保证Kafka中的Topic数据不被重复处理，是在数据源的位置进行状态记录。
+
 reference doc: http://shiyanjun.cn/archives/934.html
+
+
