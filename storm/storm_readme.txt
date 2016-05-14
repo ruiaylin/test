@@ -243,6 +243,9 @@ storm jar allmycode.jar org.me.MyTopology arg1 arg2 arg3
 storm kill {toponame}
 其中，{toponame}为Topology提交到Storm集群时指定的Topology任务名称。
 
+6 storm的成员
+disruptor\drpc\thrift\netty\zookeeper\zmq\simple-acl
+
 [storm+kafka]
 apache-storm-0.9.2-incubating这个版本的Storm已经自带了一个集成Kafka的外部插件程序storm-kafka，可以直接使用
 
@@ -269,5 +272,3 @@ spoutConf.forceFromStart = false;
 该配置是指，如果该Topology因故障停止处理，下次正常运行时是否从Spout对应数据源Kafka中的该订阅Topic的起始位置开始读取，如果forceFromStart=true，则之前处理过的Tuple还要重新处理一遍，否则会从上次处理的位置继续处理，保证Kafka中的Topic数据不被重复处理，是在数据源的位置进行状态记录。
 
 reference doc: http://shiyanjun.cn/archives/934.html
-
-
