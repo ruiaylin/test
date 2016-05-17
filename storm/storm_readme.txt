@@ -31,10 +31,14 @@ D是在leader挂掉时专门用来进行选举leader所用
 
 [zoo.cfg 示例]
 
+# 最基本的tick时间单元, ms
 tickTime=2000
+# follower启动后会从leader拉取全量配置，花费时间可能比较长，时间长度是initLimit * tickTime
 initLimit=10
+# leader与follower之间增量同步的超时时长，可以认为是心跳包超时时间，时间长度是syncLimit * tickTime
 syncLimit=5
 dataDir=data
+# log数据的目录尽量与data数据的目录不要放在一个磁盘上，以达到最高性能
 dataLogDir=data/log
 autopurge.snapRetainCount=3
 autopurge.purgeInterval=1
