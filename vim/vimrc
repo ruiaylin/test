@@ -174,6 +174,16 @@ func! AddTitle()
 		call append(21, "#if (defined(__cplusplus))")
 		call append(22, "    }")
 		call append(23, "#endif")
+    elseif &filetype == "java"
+		call append(0, "// *****************************************************")
+		call append(1, "// DESC    : ")
+		call append(2, "// AUTHOR  : Alex Stocks")
+		call append(3, "// VERSION : 1.0")
+		call append(4, "// LICENCE : LGPL V3")
+		call append(5, "// EMAIL   : alexstocks@foxmail.com")
+		call append(6, "// MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(7, "// FILE    : ".expand("%:t"))
+		call append(8, "// ******************************************************")
     elseif &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
 		call append(0, "/******************************************************")
 		call append(1, "# DESC    : ")
@@ -217,16 +227,17 @@ func! AddTitle()
 		call append(17, "    fmt.Println(\"hello\", world\)")
 		call append(18, "}")
     elseif &filetype == "python"
-		call append(0, "\#!/bin/python")
-		call append(1, "# ******************************************************")
-		call append(2, "# DESC    : ")
-		call append(3, "# AUTHOR  : Alex Stocks")
-		call append(4, "# VERSION : 1.0")
-		call append(5, "# LICENCE : LGPL V3")
-		call append(6, "# EMAIL   : alexstocks@foxmail.com")
-		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
-		call append(8, "# FILE    : ".expand("%:t"))
-		call append(9, "# ******************************************************")
+		call append(0, "\#!/usr/bin/env python")
+		call append(1, "# -*- coding: UTF-8 -*-")
+		call append(2, "# ******************************************************")
+		call append(3, "# DESC    : ")
+		call append(4, "# AUTHOR  : Alex Stocks")
+		call append(5, "# VERSION : 1.0")
+		call append(6, "# LICENCE : LGPL V3")
+		call append(7, "# EMAIL   : alexstocks@foxmail.com")
+		call append(8, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(9, "# FILE    : ".expand("%:t"))
+		call append(10, "# ******************************************************")
     elseif &filetype == "lua"
 		call append(0, "--[[ #!/usr/bin/env lua --]]")
 		call append(1, "--------------------------------------------------------")
@@ -1034,8 +1045,8 @@ func! Compile()
     silent exec "!clear;"
     silent exec "!echo Start Compiling......"
     if &filetype == "c"
-        silent exec "!echo gcc -c -Wall -rdynamic -O2 -o %<.o %"
-        silent exec "!gcc -c -Wall -rdynamic -O2 -o %<.o %"
+        silent exec "!echo gcc -c -Wall -rdynamic -std=c99 -O2 -o %<.o %"
+        silent exec "!gcc -c -Wall -rdynamic -std=c99 -O2 -o %<.o %"
     elseif &filetype == "cpp" || &filetype == "cc"
         silent exec "!echo g++ -c -Wall -rdynamic -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -O2 -o %<.o %"
         silent exec "!g++ -c -Wall -rdynamic -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -O2 -o %<.o %"
@@ -1051,7 +1062,7 @@ func! CompileSO()
     exec "!clear;"
     silent exec "!echo Start Compiling......"
     if &filetype == "c"
-        exec "!gcc -fpic -shared -Wall -lpthread -lrt -rdynamic -O2 -o %<.so %"
+        exec "!gcc -fpic -shared -Wall -lpthread -lrt -rdynamic -std=c99 -O2 -o %<.so %"
     elseif &filetype == "cpp" || &filetype == "cc"
         exec "!g++ -fpic -shared -Wall -lpthread -lrt -rdynamic -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -O2 -o %<.so %"
     elseif &filetype == "erl"
@@ -1068,8 +1079,8 @@ func! LinkGcc()
     silent exec "!clear;"
     silent exec "!echo Start Compiling and Linking......"
     if &filetype == "c"
-        silent exec "!echo gcc -lpthread -lrt -rdynamic -Wall -O2 -o %< %"
-        silent exec "!gcc -lpthread -lrt -rdynamic -Wall -O2 -o %< %"
+        silent exec "!echo gcc -lpthread -lrt -rdynamic -Wall -std=c99 -O2 -o %< %"
+        silent exec "!gcc -lpthread -lrt -rdynamic -Wall -std=c99 -O2 -o %< %"
     elseif &filetype == "cpp" || &filetype == "cc"
         silent exec "!echo g++ -lpthread -lrt -rdynamic -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -Wall -O2 -o %< %"
         silent exec "!g++ -lpthread -lrt -rdynamic -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -Wall -O2 -o %< %"
@@ -1102,7 +1113,7 @@ func!  Debug()
     silent exec "!clear;"
     silent exec "!echo  Start Compiling"
     if &filetype == "c"
-        silent exec "!gcc -gstabs+ -Wall -lpthread -lrt -o %< %"
+        silent exec "!gcc -gstabs+ -Wall -lpthread -lrt -std=c99 -o %< %"
     elseif &filetype == "cpp" || &filetype == "cc"
         silent exec "!g++ -gstabs+ -Wall -lpthread -lrt -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -o %< %"
     endif
@@ -1121,8 +1132,11 @@ func!  Run()
     silent exec "!clear;"
     silent exec "!echo  Start Compiling......"
     if &filetype == "c"
-        silent exec "!echo gcc -Wall -lpthread -lrt -rdynamic -O2 -I./ -o %< %"
-        silent exec "!gcc -Wall -lpthread -lrt -rdynamic -I./ -O2 -o %< %"
+        silent exec "!echo gcc -Wall -lpthread -lrt -rdynamic -std=c99 -O2 -I./ -o %< %"
+        silent exec "!gcc -Wall -lpthread -lrt -rdynamic -I./ -std=c99 -O2 -o %< %"
+    elseif &filetype == "java"
+        silent exec "!echo javac %"
+        silent exec "!javac %"
     elseif &filetype == "cpp" || &filetype == "cc"
         silent exec "!echo g++ -Wall -lpthread -lrt -rdynamic -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -I./ -O2 -o %< %"
         silent exec "!g++ -Wall -lpthread -lrt -rdynamic -O2 -D_GLIBCXX_USE_NANOSL -D_GLIBCXX_USE_NANOSLEEP -D_GLIBCXX_USE_SCHED_YIELD -std=c++11 -I./ -o %< %"
@@ -1139,11 +1153,15 @@ func!  Run()
         silent exec "!echo lua %"
         silent exec "!lua %"
     endif
+    silent exec "!echo Compile over."
     if &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
-        silent exec "!echo Compile over."
         silent exec "!echo start running..."
         silent exec "!chmod u+rx ./%<"
         silent exec "!./%<"
+    elseif &filetype == "java"
+        silent exec "!echo start running..."
+        silent exec "!java %<"
+		silent exec "!rm %<.class"
     endif
     exec "!echo "
 endfunc
