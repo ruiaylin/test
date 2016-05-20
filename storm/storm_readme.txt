@@ -276,3 +276,49 @@ spoutConf.forceFromStart = false;
 该配置是指，如果该Topology因故障停止处理，下次正常运行时是否从Spout对应数据源Kafka中的该订阅Topic的起始位置开始读取，如果forceFromStart=true，则之前处理过的Tuple还要重新处理一遍，否则会从上次处理的位置继续处理，保证Kafka中的Topic数据不被重复处理，是在数据源的位置进行状态记录。
 
 reference doc: http://shiyanjun.cn/archives/934.html
+
+[storm knowledge]
+
+1 storm-redis from 0.10.0
+
+https://github.com/apache/storm/tree/master/external/storm-redis
+
+2 Topology并行度计算
+
+有关Topology的并行度的计算，官网上有一篇文章介绍（后面参考链接中已附上），我们这里详细解释一下，对于理解Storm UI上面的一些统计数据也会有很大帮助。在编写代码设置并行度的时候，并行度只是一个提示信息，Storm会根据这个提示信息并结合其他一些参数配置（Task个数、Worker个数），去计算运行时的并行度，这个并行度实际上描述的是，组成一个Topology的多个Spout/Bolt的运行时表现实体Task的分布，所以我们可能会想关注从一个Topology的角度去看，这些设置了并行度的Spout/Bolt对应的运行时Task，在集群的多个Worker进程之间，以及Executor内部是如何分布的。
+下面是例子给出的Topology的设计，如下图所示：
+storm-example-topology
+对该例子Topology配置了2个Worker，对应的代码示例如下所示：
+
+
+conf.setNumWorkers(2); // 该Topology运行在Supervisor节点的2个Worker进程中
+conf.setMaxSpoutPending(5000);
+conf.setMessageTimeoutSecs(60); // 提交Topology 时设置适当的消息超时时间，比默认消息超时时间（30秒）更长。
+topologyBuilder.setSpout("blue-spout", new BlueSpout(), 2); // 设置并行度为2，则Task个数为2*1
+topologyBuilder.setBolt("green-bolt", new GreenBolt(), 2)
+               .setNumTasks(4)
+               .shuffleGrouping("blue-spout"); // 设置并行度为2，设置Task个数为4 ，则Task个数为4
+topologyBuilder.setBolt("yellow-bolt", new YellowBolt(), 6)
+               .shuffleGrouping("green-bolt"); // 设置并行度为6，则Task个数为6*1
+               
+那么，下面我们看Storm是如何计算一个Topology运行时的并行度，并分配到2个Worker中的：
+
+计算Task总数：2*1+4+6*1=12（总计创建12个Task实例）
+计算运行时Topology并行度：10/2=5（每个Worker对应5个Executor）
+将12个Task分配到2个Worker中的5*2个Executor中：应该是每个Worker上5个Executor，将6个Task分配到5个Executor中
+每个Worker中分配6个Task，应该是分配3个Yellow Task、2个Green Task、1个Blue Task
+Storm内部优化：会把同类型的Task尽量放到同一个Executor中运行
+分配过程：从Task个数最少的开始，1个Blue Task只能放到一个Executor，总计1个Executor被占用；2个Green Task可以放到同一个Executor中，总计2个Executor被占用；最后看剩下的3个Yellow Task能否分配到5-2=3个Executor中，显然每个Yellow Task对应一个Executor
+从直观上看，其实分配Task到多个Executor中的分配结果有很多种，都能满足尽量让同类型Task在相同的Executor中，有关Storm的计算实现可以参考源码。
+
+3 feilds grouping
+In order to send the message to the same task every time storm will mod the hashcode of the value with the number of tasks (hashcode(values)% #tasks). 
+
+4 关于task与executor的关系
+在我们配置storm的时候，不知大家是否主要到了一个问题，就是我们在配置的时候会加几个worker的端口( supervisor.slots.ports:)，比如众多文档中提到的6700/6701等等类似的东西，没错这就是我们定义了该supervisor最多的worker数，worker中执行一个bolt或者spout线程，我们就称之为taks，而executor是物理上的线程概念，而task更多是逻辑概念上的，有时候bolt与spout的task会共用executor，特别是在系统负荷比较高的时候。
+
+5 IRichBolt与IBasicBolt接口区别
+首先从类组成上进行分析可以看到，IBasicBolt接口只有execute方法和declareOutputFields方法，而IRichBolt接口上除了以上几个方法还有prepare方法和cleanup及Map方法。而且其中execute方法是有些不一样的，其参数列表不同。
+
+总体来说Rich方法比较晚上，我们可以使用prepare方法进行该Bolt类的初始化工作，例如我们链接数据库时，需要进行一次数据库连接操作，我们就可以把该操作放入prepare中，只需要执行一次就可以了。而cleanup方法能在该类调用结束时进行收尾工作，往往在处理数据的时候用到，例如在写hdfs（hadoop的文件系统）数据的时候，在结束时需要进行数据clear，则需要进行数据收尾。当然，根据官网及本人的实验，该方法往往是执行失败的。
+
