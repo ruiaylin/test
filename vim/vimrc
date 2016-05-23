@@ -728,6 +728,18 @@ func! DefineClass()
 		call append(line(".") + 13, "        int var;")
 		call append(line(".") + 14, "};")
 		normal ddj4w
+	elseif &filetype == "java"
+		call append(line(".") + 0, "/**")
+		call append(line(".") + 1, " * description   : to .<br/><br/>")
+		call append(line(".") + 2, " *")
+		call append(line(".") + 3, " * @val          : value")
+		call append(line(".") + 4, " **/")
+		call append(line(".") + 5, "public class Test {")
+		call append(line(".") + 6, "    public static final int var = 3;")
+		call append(line(".") + 7, "    public Test() {}")
+		call append(line(".") + 8, "    public void exec() {}")
+		call append(line(".") + 9, "}")
+		normal ddj4w
     elseif &filetype == "go"
         call append(line(".") + 0, "type tag interface {")
         call append(line(".") + 1, "    Get() int")
@@ -760,6 +772,11 @@ func! MainFunc()
         call append(line(".") + 2, "    return 0;")
         call append(line(".") + 3, "}")
 		normal dd2jOa
+    elseif &filetype == "java"
+        call append(line(".") + 0, "    public static void main(String[] args) throws IOException {")
+        call append(line(".") + 1, "        System.out.println(\"hello\")")
+        call append(line(".") + 2, "    }")
+		normal ddjw
     elseif &filetype == "go"
         call append(line(".") + 0, "func main() {")
         call append(line(".") + 1, "    fmt.Println(\"hello %T %#v\", v, v)")
