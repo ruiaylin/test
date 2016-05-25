@@ -174,16 +174,6 @@ func! AddTitle()
 		call append(21, "#if (defined(__cplusplus))")
 		call append(22, "    }")
 		call append(23, "#endif")
-    elseif &filetype == "java"
-		call append(0, "// *****************************************************")
-		call append(1, "// DESC    : ")
-		call append(2, "// AUTHOR  : Alex Stocks")
-		call append(3, "// VERSION : 1.0")
-		call append(4, "// LICENCE : LGPL V3")
-		call append(5, "// EMAIL   : alexstocks@foxmail.com")
-		call append(6, "// MOD     : ".strftime("%Y-%m-%d %H:%M"))
-		call append(7, "// FILE    : ".expand("%:t"))
-		call append(8, "// ******************************************************")
     elseif &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
 		call append(0, "/******************************************************")
 		call append(1, "# DESC    : ")
@@ -206,6 +196,22 @@ func! AddTitle()
 		call append(18, "#if (defined(__cplusplus))")
 		call append(19, "    }")
 		call append(20, "#endif")
+    elseif &filetype == "java"
+		call append(0, "// *****************************************************")
+		call append(1, "// DESC    : ")
+		call append(2, "// AUTHOR  : Alex Stocks")
+		call append(3, "// VERSION : 1.0")
+		call append(4, "// LICENCE : LGPL V3")
+		call append(5, "// EMAIL   : alexstocks@foxmail.com")
+		call append(6, "// MOD     : ".strftime("%Y-%m-%d %H:%M"))
+		call append(7, "// FILE    : ".expand("%:t"))
+		call append(8, "// ******************************************************")
+		call append(9, "")
+		call append(10, "package main;")
+		call append(11, "")
+		call append(12, "import java.io.*;")
+		call append(13, "import java.util.*;")
+
     elseif &filetype == "go"
 		call append(0, "/******************************************************")
 		call append(1, "# DESC    : ")
@@ -396,6 +402,10 @@ func! IncludeHeader()
         call append(line(".") + 0, "#include <>")
         call append(line(".") + 1, "#include \"\"")
 		normal dd$
+    elseif &filetype == "java"
+        call append(line(".") + 0, "import java.io.*;")
+        call append(line(".") + 1, "import java.util.*;")
+		normal dd$
     elseif &filetype == "go"
         call append(line(".") + 0, "import (")
         call append(line(".") + 1, "    \"fmt\"")
@@ -441,6 +451,9 @@ func! Output()
     elseif &filetype == "h" || &filetype == "hpp" || &filetype == "c" || &filetype == "cpp" || &filetype == "cc"
 		call append(line("."), "    printf(\"%d\", idx);")
 		normal dd2w
+    elseif &filetype == "java"
+        call append(line("."), "		System.out.println(\"Hello:\");")
+		normal dd4w
     elseif &filetype == "go"
         call append(line("."), "    fmt.Println(\"Hello:\", )")
 		normal dd4w
@@ -774,7 +787,7 @@ func! MainFunc()
 		normal dd2jOa
     elseif &filetype == "java"
         call append(line(".") + 0, "    public static void main(String[] args) throws IOException {")
-        call append(line(".") + 1, "        System.out.println(\"hello\")")
+        call append(line(".") + 1, "        System.out.println(\"hello\");")
         call append(line(".") + 2, "    }")
 		normal ddjw
     elseif &filetype == "go"

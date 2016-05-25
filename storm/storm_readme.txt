@@ -63,7 +63,7 @@ bin/zkServer.sh status {
     Mode: follower
 }
 
-echo stat|nc localhost 2203 {
+echo stat | nc localhost 2203 {
     Zookeeper version: 3.4.6-1569965, built on 02/20/2014 09:09 GMT
     Clients:
      /0:0:0:0:0:0:0:1:7054[0](queued=0,recved=1,sent=0)
@@ -86,7 +86,6 @@ jps {
     6124 Jps
     5749 QuorumPeerMain
 }
-
 
 sh zkCli.sh -server localhost:2201
 
@@ -315,10 +314,13 @@ Storm内部优化：会把同类型的Task尽量放到同一个Executor中运行
 In order to send the message to the same task every time storm will mod the hashcode of the value with the number of tasks (hashcode(values)% #tasks). 
 
 4 关于task与executor的关系
-在我们配置storm的时候，不知大家是否主要到了一个问题，就是我们在配置的时候会加几个worker的端口( supervisor.slots.ports:)，比如众多文档中提到的6700/6701等等类似的东西，没错这就是我们定义了该supervisor最多的worker数，worker中执行一个bolt或者spout线程，我们就称之为taks，而executor是物理上的线程概念，而task更多是逻辑概念上的，有时候bolt与spout的task会共用executor，特别是在系统负荷比较高的时候。
+在我们配置storm的时候，不知大家是否主要到了一个问题，就是我们在配置的时候会加几个worker的端口(supervisor.slots.ports:)，比如众多文档中提到的6700/6701等等类似的东西，没错这就是我们定义了该supervisor最多的worker数，worker中执行一个bolt或者spout线程，我们就称之为taks，而executor是物理上的线程概念，而task更多是逻辑概念上的，有时候bolt与spout的task会共用executor，特别是在系统负荷比较高的时候。
 
 5 IRichBolt与IBasicBolt接口区别
 首先从类组成上进行分析可以看到，IBasicBolt接口只有execute方法和declareOutputFields方法，而IRichBolt接口上除了以上几个方法还有prepare方法和cleanup及Map方法。而且其中execute方法是有些不一样的，其参数列表不同。
 
 总体来说Rich方法比较晚上，我们可以使用prepare方法进行该Bolt类的初始化工作，例如我们链接数据库时，需要进行一次数据库连接操作，我们就可以把该操作放入prepare中，只需要执行一次就可以了。而cleanup方法能在该类调用结束时进行收尾工作，往往在处理数据的时候用到，例如在写hdfs（hadoop的文件系统）数据的时候，在结束时需要进行数据clear，则需要进行数据收尾。当然，根据官网及本人的实验，该方法往往是执行失败的。
+
+6 storm ui显示不正常
+清理下chrome的缓存
 
