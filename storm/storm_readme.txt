@@ -95,6 +95,9 @@ sh zkCli.sh -server localhost:2201
 ./zkCli.sh -server localhost:2201
 create /kafka ''
 ls /
+delete /jstorm
+get /jstorm
+set /jstorm 'hello'
 
 1 /usr/local/kafka/config/server.properties
 
@@ -323,4 +326,51 @@ In order to send the message to the same task every time storm will mod the hash
 
 6 storm ui显示不正常
 清理下chrome的缓存
+
+[storm-redis]
+
+最近一直在跟进storm的问题，从storm集群的稳定性到监控到升级到bolt写redis的问题,因为公司目前没有专业运维redis的，只能我们数据部门自己搞了。。下面记录下遇到的几个问题:
+
+总结下目前storm写redis问题:
+
+1.redis高峰写入异常，增加redis监控，发现cpu性能瓶颈(redis单线程，最高10w/s的处理量)
+
+2.之前redis bolt的并发在200以上，过多的并发对redis的性能造成比较大的影响，现在已经减少为5
+
+3.关闭了redis的monitor监控,常驻的monitor监控对redis的性能损耗在30%左右
+
+4.关闭了redis的rdb持久化方式，开启了aof的方式，在低峰aofrewrite
+
+5.扩容到8个实例，使用jedissharding的方式，高峰时单机超过5W/s处理量
+
+6.去掉select操作，使用默认db0
+
+7.对高峰时的数据进行分析，40w/s的处理量中，ping操作占50%以上，调整jedispool的设置，基本上屏蔽了ping的操作
+
+8.bolt端batch处理，减少写入量
+
+9.40%的expire操作，测试ttl+expire vs expire的性能，基于ttl+expire的方式在一个操作里面的性能损耗在35%左右，
+
+如果是同一个key在一个线程里面顺序操作会有性能的提升（目前我们没有这种场景）
+
+1)直接expire
+
+hardedJedis.set(key,value)
+
+hardedJedis.expire(key,1000)
+
+2)ttl+expire
+
+hardedJedis.set(key,value)
+
+Long re = shardedJedis.ttl(key);
+
+if ((re == -1)||(re == -2)){hardedJedis.expire(key,1000)};
+
+10.从第8点测试来看40%的expire操作是省不了了，只能从提高单次处理量(pipline)来做优化了
+
+11.测试了lvs->twemproxy->redis的方案，不太稳定，考虑引用到的组件比较多，twemproxy相对来说对于我们这边也是一个黑盒
+
+12.jedissharding的方案在高峰时会有一些延迟，，单机方案相对来说比较稳定，如果接入数据量变大的话还是要走sharding模式，延迟的原因需要继续跟进
+
 
