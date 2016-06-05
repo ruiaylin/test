@@ -40,8 +40,13 @@ syncLimit=5
 dataDir=data
 # log数据的目录尽量与data数据的目录不要放在一个磁盘上，以达到最高性能
 dataLogDir=data/log
-autopurge.snapRetainCount=3
+
+# 3.4.0及之后版本，ZK提供了自动清理事务日志和快照文件的功能，这个参数指定了清理频率，单位是小时，
+# 需要配置一个1或更大的整数，默认是0，表示不开启自动清理功能，但可以运行bin/zkCleanup.sh来手动清理zk日志。
 autopurge.purgeInterval=1
+# 这个参数和上面的参数搭配使用，这个参数指定了需要保留的文件数目。默认是保留3个。
+autopurge.snapRetainCount=3
+
 clientPort=2201
 server.1=116.211.15.192:2001:3001
 server.2=116.211.15.192:2002:3002
@@ -251,6 +256,25 @@ storm kill {toponame}
 
 6 storm的成员
 disruptor\drpc\thrift\netty\zookeeper\zmq\simple-acl
+
+[jstorm]
+安装JStorm UI，可以安装在任何一个节点上，只要保证JStorm UI的安装包（WAR文件）的配置文件和JStorm集群相同即可。JStorm UI运行在Web容器之中，可以使用Tomcat。我这里，直接在Nimbus节点上安装Jstorm UI。
+首先，安装Tomcat Web容器：
+
+wget http://apache.fayea.com/tomcat/tomcat-7/v7.0.57/bin/apache-tomcat-7.0.57.zip
+unzip apache-tomcat-7.0.57.zip
+cd apache-tomcat-7.0.57
+chmod +x bin/*.sh
+然后，将jstorm-ui-0.9.6.2.war软件包拷贝到Tomcat的webapps目录下，jstorm-ui-0.9.6.2.war直接在解压缩的jstorm-0.9.6.2.zip包中，拷贝即可：
+
+cp ~/jstorm-0.9.6.2/jstorm-ui-0.9.6.2.war webapps/
+mv ROOT ROOT.old
+ln -s jstorm-ui-0.9.6.2 ROOT
+在启动Tomcat之前，要保证配置文件$JSTORM_HOME/conf/storm.yaml拷贝到目录~/.jstorm下面。
+最后，启动Tomcat，并查看日志：
+
+bin/catalina.sh start
+tail -100f logs/catalina.out
 
 [storm+kafka]
 apache-storm-0.9.2-incubating这个版本的Storm已经自带了一个集成Kafka的外部插件程序storm-kafka，可以直接使用
