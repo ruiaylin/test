@@ -33,7 +33,7 @@ doskey killall= killall.bat $*
 doskey free=mem
 doskey whoami=whoami.bat
 doskey daemon=bootstrap.bat
-doskey myctags=ctags -R --c++-kinds=+p --fields=+iaS --extra=+q --language-force=C++ ./* 
+doskey myctags=ctags -R --c++-kinds=+p --fields=+iaS --extra=+q --language-force=C++ ./*
 rem crt file
 doskey touch=copy con $*
 doskey ifconfig=ipconfig /all
@@ -72,7 +72,7 @@ doskey lyellow=color e0
 doskey lwhite=color 7e
 doskey dos=color 1f
 doskey eye=color 60
-doskey tradition=color 0f 
+doskey tradition=color 0f
 doskey matrix=color a0
 doskey row=mode con lines=$1
 doskey col=mode con cols=$1
@@ -91,6 +91,10 @@ doskey ie="C:\Program Files\Internet Explorer\iexplore.exe" $*
 doskey cmp="D:\Program Files\WinMerge-2.13.20-exe\WinMergeU.exe" $*
 doskey sw=start www.baidu.com/s?wd=$*
 doskey sb="C:\Program Files\Sublime Text3\sublime_text.exe" $*
+
+rem set local variable
+set sec=%USERPROFILE%\\share\\securecrt
+
 title linux simulator By: Alexander Stocks
 SETLOCAL ENABLEEXTENSIONS&SETLOCAL ENABLEDELAYEDEXPANSION
 cls
