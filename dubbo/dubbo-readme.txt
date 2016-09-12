@@ -39,3 +39,10 @@ dubbo.registry.address=zookeeper://127.0.0.1:2181
 3 执行
 sh bin/start.sh
 
+dubbo.registry.address=zookeeper://192.168.35.3:2181
+dubbo.admin.root.password=root
+dubbo.admin.guest.password=guest
+
+[dubbo-admin]
+vim ./src/main/webapp/WEB-INF/dubbo.properties
+mvn jetty:run eclipse:eclipse
