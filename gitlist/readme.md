@@ -64,6 +64,7 @@ Here is a github repository list.
 * [stack](https://github.com/go-stack/stack) - Package stack implements utilities to capture, manipulate, and format call stacks. It provides a simpler API than package runtime.(用于输出函数栈内容)(lang:golang, star:96, 2016/09/23)
 * [go_reuseport](https://github.com/kavu/go_reuseport) - GO_REUSEPORT is a little expirement to create a net.Listener that supports SO_REUSEPORT socket option.(lang:golang, star:160, 2016/09/23)
 * [go-deamon](https://github.com/sevlyar/go-daemon) - A library for writing system daemons in golang.(lang:golang, star:339, 2016/09/23)
+* [go-exit](https://github.com/simia-tech/go-exit) - An exit strategy for go routines.(lang:golang, star:52, 2016/09/23)
 
 - network
 * [link](https://github.com/funny/link) - link包的核心是Session，Session的字面含义是会话，就是一次对话过程。每一个连接的生命周期被表达为一个会话过程，这个过程中通讯双方的消息有来有往。.(lang:golang, star:572, 2016/09/23)
