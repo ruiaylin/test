@@ -3,11 +3,16 @@
 Here is a github repository list.
 
 - [git list](#git list)
+	- [alg](#algorithm list)
 	- [devops](#devops tool list)
 	- [docker](#docker tool list)
 	- [geo](#geography)
 	- [golang](#golang packages)
 	- [kafka](#kafka tool list)
+
+---
+## alg
+* [raft-zh_cn](https://github.com/maemual/raft-zh_cn) - Raft一致性算法论文的中文翻译. (lang: Chinese, star:181, 2016/09/23)
 
 ---
 ## devops
