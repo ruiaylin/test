@@ -17,6 +17,7 @@ Here is a github repository list.
 ---
 ## alg
 * [raft-zh_cn](https://github.com/maemual/raft-zh_cn) - Raft一致性算法论文的中文翻译. (lang: Chinese, star:181, 2016/09/23)
+* [redis-failover](https://github.com/siddontang/redis-failover) - Automatic redis monitoring and failover based on Go.(http://siddontang.com/2015/05/03/use-hashicorp-raft-to-build-a-redis-sentinel/)(lang:golang, star:66, 2016/09/23)
 
 ---
 ## C++
