@@ -18,6 +18,10 @@ Here is a github repository list.
 * [raft-zh_cn](https://github.com/maemual/raft-zh_cn) - Raft一致性算法论文的中文翻译. (lang: Chinese, star:181, 2016/09/23)
 
 ---
+## C++
+* [awesome-cpp](https://github.com/fffaraz/awesome-cpp) - A curated list of awesome C/C++ frameworks, libraries, resources, and shiny things. Inspired by awesome-... stuff.(lang:markdown, star:6153, 2016/09/23)
+
+---
 ## devops
 * [CrazyEye](https://github.com/triaquae/CrazyEye) - OpenSource IT Automation Software. CrazyEye是基于Python开发的一款简单易用的IT管理软件. (lang:python, star:263, 2016/09/23)
 
@@ -37,6 +41,7 @@ Here is a github repository list.
 * [edge](https://github.com/QianmiOpen/edge) - Dubbo Visualized Testing Tool.(lang:java, star:40, 2016/09/23)
 * [dubbo_jsonrpc_demo](https://github.com/quickj/dubbo_jsonrpc_demo) - a simple demo for dubbo with jsonrpc protocol(dubbo jsonrpc简单例子).(lang:java, star:8, 2016/09/23)
 * [dubbo_jsonrpc_example](https://github.com/JoeCao/dubbo_jsonrpc_example) - A full example of Dubbo JsonRPC provider exports and python client call the remote service.(lang:java, star:0, 2016/09/23)
+* [goshop](https://github.com/pzhgugu/goshop) - 分布式多店铺电商系统，使用技术：spring 、springmvc、mybatis、maven、html5、jquery、freemarker、Redis（缓存服务器）、Solr（搜索引擎）、Dubbo（调用系统服务）、Nginx（web服务器）、FastDFS（文件服务器）、Shiro（权限框架）、Zookeeper（分布式应用程序协调服务）.(lang:java, star:116, 2016/09/23)
 
 ---
 ## geo
@@ -44,33 +49,64 @@ Here is a github repository list.
 
 ---
 ## golang
+
+- data structure
 * [pool](https://github.com/AlexStocks/pool) - Pool is a thread safe object pool for Object interface.(lang:golang, 2016/09/23)
-* [statsrelay](https://github.com/AlexStocks/statsrelay) - A Golang consistent hashing proxy for statsd.(lang:golang, star:20, 2016/09/23)
-* [cow](https://github.com/cyfdecyf/cow) - HTTP proxy written in Go. COW can automatically identify blocked sites and use parent proxies to access.(lang:golang, star:4267, 2016/09/23)
-* [awesome-go](https://github.com/avelino/awesome-go) - A curated list of awesome Go frameworks, libraries and software.(lang:golang, star:15112, 2016/09/23)
-* [logkafka](https://github.com/Qihoo360/logkafka) - Collect logs and send lines to Apache Kafka.(lang:golang, star:282, 2016/09/23)
-* [logfmt](https://github.com/go-logfmt/logfmt) - Package logfmt marshals and unmarshals logfmt messages.(lang:golang, star:37, 2016/09/23)
+* [set](https://github.com/fatih/set) - Set is a basic and simple, hash-based, Set data structure implementation in Go (Golang).(lang:golang, star:378, 2016/09/23)
+* [utils](https://github.com/golangers/utils) - convert struct to map.(lang:golang, star:6, 2016/09/23)
+* [gods](https://github.com/emirpasic/gods) - Go Data Structures. Containers, Sets, Lists, Stacks, Maps, BidiMaps, Trees, HashSet, TreeSet, ArrayList, SinglyLinkedList, DoublyLinkedList, LinkedListStack, ArrayStack, HashMap, TreeMap, HashBidiMap, TreeBidiMap, RedBlackTree, BTree, BinaryHeap, Comparator, Iterator, Enumerable, Sort.(lang:golang, star:2112, 2016/09/23)
+* [bytes](https://github.com/qiniu/bytes) - Extension module of golang bytes processing.(lang:golang, star:9, 2016/09/23)
+
+- system
+* [goid](https://github.com/sillyousu/goid) - obtain goroutine id outside go runtime. linux/amd64 go1.6.(lang:golang, star:3, 2016/09/23)
+* [stack](https://github.com/go-stack/stack) - Package stack implements utilities to capture, manipulate, and format call stacks. It provides a simpler API than package runtime.(用于输出函数栈内容)(lang:golang, star:96, 2016/09/23)
+* [go_reuseport](https://github.com/kavu/go_reuseport) - GO_REUSEPORT is a little expirement to create a net.Listener that supports SO_REUSEPORT socket option.(lang:golang, star:160, 2016/09/23)
+* [go-deamon](https://github.com/sevlyar/go-daemon) - A library for writing system daemons in golang.(lang:golang, star:339, 2016/09/23)
+
+- network
 * [link](https://github.com/funny/link) - link包的核心是Session，Session的字面含义是会话，就是一次对话过程。每一个连接的生命周期被表达为一个会话过程，这个过程中通讯双方的消息有来有往。.(lang:golang, star:572, 2016/09/23)
 * [rpc](https://github.com/jason-xxl/rpc) - A golang foundation for JSONRPC 2.0(with batch feature) over HTTP services.(lang:golang, star:0, 2016/09/23)
-* [set](https://github.com/fatih/set) - Set is a basic and simple, hash-based, Set data structure implementation in Go (Golang).(lang:golang, star:378, 2016/09/23)
-* [stack](https://github.com/go-stack/stack) - Package stack implements utilities to capture, manipulate, and format call stacks. It provides a simpler API than package runtime.(用于输出函数栈内容)(lang:golang, star:96, 2016/09/23)
-* [bild](https://github.com/anthonynsimon/bild) - A collection of parallel image processing algorithms in pure Go.(lang:golang, star:1158, 2016/09/23)
-* [go-deamon](https://github.com/sevlyar/go-daemon) - A library for writing system daemons in golang.(lang:golang, star:339, 2016/09/23)
-* [go_reuseport](https://github.com/kavu/go_reuseport) - GO_REUSEPORT is a little expirement to create a net.Listener that supports SO_REUSEPORT socket option.(lang:golang, star:160, 2016/09/23)
-* [RationalDb](https://github.com/senarukana/RationalDb) - RationalDB is a trial distributed database middleware for k/v storage engine based on Vitess.(lang:golang, star:11, 2016/09/23)
+* [kit](https://github.com/go-kit/kit) - Go kit is a distributed programming toolkit for building microservices in large organizations. We solve common problems in distributed systems, so you can focus on your business logic.(lang:golang, star:5153, 2016/09/23)
+* [statsrelay](https://github.com/AlexStocks/statsrelay) - A Golang consistent hashing proxy for statsd.(lang:golang, star:20, 2016/09/23)
+* [cow](https://github.com/cyfdecyf/cow) - HTTP proxy written in Go. COW can automatically identify blocked sites and use parent proxies to access.(lang:golang, star:4267, 2016/09/23)
 * [gotunnel](https://github.com/ciju/gotunnel) - Gotunnel makes your localhost server or directory accessible on the net. It supports HTTP/S and WebSocket.(lang:golang, star:53, 2016/09/23)
-* [utils](https://github.com/golangers/utils) - convert struct to map.(lang:golang, star:6, 2016/09/23)
 * [socks](https://github.com/h12w/socks) - A SOCKS (SOCKS4, SOCKS4A and SOCKS5) Proxy Package for Go.(lang:golang, star:135, 2016/09/23)
 * [dht](https://github.com/nictuku/dht) - This is a golang Kademlia/Bittorrent DHT library that implements BEP 5. It's typically used by a torrent client such as Taipei-Torrent, but it could also be used by a standalone DHT routers, or for other more creative purposes.(lang:golang, star:386, 2016/09/23)
+* [doorman](https://github.com/youtube/doorman) - Doorman is a solution for Global Distributed Client Side Rate Limiting. Clients that talk to a shared resource (such as a database, a gRPC service, a RESTful API, or whatever) can use Doorman to voluntarily limit their use (usually in requests per second) of the resource. Doorman is written in Go and uses gRPC as its communication protocol. For some high-availability features it needs a distributed lock manager. We currently support etcd, but it should be relatively simple to make it use Zookeeper instead.(lang:golang, star:790, 2016/09/23)
+
+- log
+* [zap](https://github.com/uber-go/zap) - Blazing fast, structured, leveled logging in Go.(lang:golang, star:1176, 2016/09/23)
+* [logfmt](https://github.com/go-logfmt/logfmt) - Package logfmt marshals and unmarshals logfmt messages.(lang:golang, star:37, 2016/09/23)
+
+- awesome
+* [awesome-go](https://github.com/avelino/awesome-go) - A curated list of awesome Go frameworks, libraries and software.(lang:golang, star:15112, 2016/09/23)
+* [golang-open-source-projects](https://github.com/hackstoic/golang-open-source-projects/blob/master/golang-open-source-projects.md) - 为互联网IT人打造的中文版awesome-go.(lang:markdown, star:81, 2016/09/23)
+
+- kafka & zookeeper
+* [logkafka](https://github.com/Qihoo360/logkafka) - Collect logs and send lines to Apache Kafka.(lang:golang, star:282, 2016/09/23)
+
+- database
+* [RationalDb](https://github.com/senarukana/RationalDb) - RationalDB is a trial distributed database middleware for k/v storage engine based on Vitess.(lang:golang, star:11, 2016/09/23)
+
+- devops
+* [checkup](https://github.com/sourcegraph/checkup) - Checkup is distributed, lock-free, self-hosted health checks and status pages, written in Go.(lang:golang, star:1544, 2016/09/23)
 
 ---
 ## kafka
-* [kafka-manager](https://github.com/yahoo/kafka-manager) - A tool for managing Apache Kafka. (lang: scala, star:2717, until 2016/09/23)
-* [trifecta](https://github.com/ldaniels528/trifecta) - Trifecta is a web-based and CLI tool that simplifies inspecting Kafka messages and Zookeeper data. Additionally, the CLI tool provides the capability to import/export data to/from ElasticSearch and MongoDB. (lang: scala, star:98, until 2016/09/23)
+* [kafka-manager](https://github.com/yahoo/kafka-manager) - A tool for managing Apache Kafka. (lang: scala, star:2717, 2016/09/23)
+* [trifecta](https://github.com/ldaniels528/trifecta) - Trifecta is a web-based and CLI tool that simplifies inspecting Kafka messages and Zookeeper data. Additionally, the CLI tool provides the capability to import/export data to/from ElasticSearch and MongoDB. (lang: scala, star:98, 2016/09/23)
+
 ---
 ## MySQL
-* [vitess](https://github.com/youtube/vitess) - Vitess is a database clustering system for horizontal scaling of MySQL.(lang: golang&php&java, star:3876, until 2016/09/23)
-* [go-mysqld](https://github.com/bickfordb/go-mysqld) - Library for authoring daemons which speak the MySQL protocol.(lang: golang, star:4, until 2016/09/23)
+* [vitess](https://github.com/youtube/vitess) - Vitess is a database clustering system for horizontal scaling of MySQL.(lang: golang&php&java, star:3876, 2016/09/23)
+* [go-mysqld](https://github.com/bickfordb/go-mysqld) - Library for authoring daemons which speak the MySQL protocol.(lang: golang, star:4, 2016/09/23)
+
+---
+## Multimedia
+* [bild](https://github.com/anthonynsimon/bild) - A collection of parallel image processing algorithms in pure Go.(lang:golang, star:1158, 2016/09/23)
+* [DslrDashboardServer](https://github.com/hubaiz/DslrDashboardServer) - DslrDashboardServer (ddserver) allows network connections (wired/wireless) for connected USB imaging devices (DSLR cameras) to DslrDashboard. It can provide multiple USB camera connections to same or different DslrDashboard client. It is primary writen for OpenWrt (TP-Link MR3040 or WR703N) but it will run on any Linux distribution including Raspbery Pi or pcDuino for example.(lang C++, star:59, 2016/09/23)
+* [DslrDashboard](https://github.com/hubaiz/DslrDashboard) - DslrDashboard.(lang:java, star:44, 2016/09/23)
+* []() - .(lang, star:, 2016/09/23)
 
 ---
 ## Redis
