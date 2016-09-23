@@ -6,9 +6,12 @@ Here is a github repository list.
 	- [alg](#algorithm list)
 	- [devops](#devops tool list)
 	- [docker](#docker tool list)
+	- [dubbo](#dubbo libs & examples)
 	- [geo](#geography)
 	- [golang](#golang packages)
 	- [kafka](#kafka tool list)
+	- [Mysql](#mysql tool list)
+	- [Redis](#redis libs)
 
 ---
 ## alg
@@ -51,11 +54,30 @@ Here is a github repository list.
 * [rpc](https://github.com/jason-xxl/rpc) - A golang foundation for JSONRPC 2.0(with batch feature) over HTTP services.(lang:golang, star:0, 2016/09/23)
 * [set](https://github.com/fatih/set) - Set is a basic and simple, hash-based, Set data structure implementation in Go (Golang).(lang:golang, star:378, 2016/09/23)
 * [stack](https://github.com/go-stack/stack) - Package stack implements utilities to capture, manipulate, and format call stacks. It provides a simpler API than package runtime.(用于输出函数栈内容)(lang:golang, star:96, 2016/09/23)
+* [bild](https://github.com/anthonynsimon/bild) - A collection of parallel image processing algorithms in pure Go.(lang:golang, star:1158, 2016/09/23)
+* [go-deamon](https://github.com/sevlyar/go-daemon) - A library for writing system daemons in golang.(lang:golang, star:339, 2016/09/23)
+* [go_reuseport](https://github.com/kavu/go_reuseport) - GO_REUSEPORT is a little expirement to create a net.Listener that supports SO_REUSEPORT socket option.(lang:golang, star:160, 2016/09/23)
+* [RationalDb](https://github.com/senarukana/RationalDb) - RationalDB is a trial distributed database middleware for k/v storage engine based on Vitess.(lang:golang, star:11, 2016/09/23)
+* [gotunnel](https://github.com/ciju/gotunnel) - Gotunnel makes your localhost server or directory accessible on the net. It supports HTTP/S and WebSocket.(lang:golang, star:53, 2016/09/23)
+* [utils](https://github.com/golangers/utils) - convert struct to map.(lang:golang, star:6, 2016/09/23)
+* [socks](https://github.com/h12w/socks) - A SOCKS (SOCKS4, SOCKS4A and SOCKS5) Proxy Package for Go.(lang:golang, star:135, 2016/09/23)
+* [dht](https://github.com/nictuku/dht) - This is a golang Kademlia/Bittorrent DHT library that implements BEP 5. It's typically used by a torrent client such as Taipei-Torrent, but it could also be used by a standalone DHT routers, or for other more creative purposes.(lang:golang, star:386, 2016/09/23)
 
 ---
 ## kafka
 * [kafka-manager](https://github.com/yahoo/kafka-manager) - A tool for managing Apache Kafka. (lang: scala, star:2717, until 2016/09/23)
 * [trifecta](https://github.com/ldaniels528/trifecta) - Trifecta is a web-based and CLI tool that simplifies inspecting Kafka messages and Zookeeper data. Additionally, the CLI tool provides the capability to import/export data to/from ElasticSearch and MongoDB. (lang: scala, star:98, until 2016/09/23)
+---
+## MySQL
+* [vitess](https://github.com/youtube/vitess) - Vitess is a database clustering system for horizontal scaling of MySQL.(lang: golang&php&java, star:3876, until 2016/09/23)
+* [go-mysqld](https://github.com/bickfordb/go-mysqld) - Library for authoring daemons which speak the MySQL protocol.(lang: golang, star:4, until 2016/09/23)
+
+---
+## Redis
+* [miniredis](https://github.com/alicebob/miniredis) - Pure Go Redis test server, used in Go unittests. Sometimes you want to test code which uses Redis, without making it a full-blown integration test. Miniredis implements (parts of) the Redis server, to be used in unittests.(lang:golang, star:294, 2016/09/23)
+* [redeo](https://github.com/bsm/redeo) - High-performance framework for building redis-protocol compatible TCP servers/services. Optimised for speed!(lang:golang, star:108, 2016/09/23)
+* [libredis](https://github.com/therealbill/libredis) - Libredis is intended to be more than a simple client connection library. It will include Redis specific custom operations, Structures, and capabilities suitable for integrating with any Go code which interacts with Redis ranging from simple CRUD operations to service management.(lang:golang, star:8, 2016/09/23)
+* [go-redis](https://github.com/fiorix/go-redis) - go-redis is a Redis client library for the Go programming language. It's built on the skeleton of gomemcache.(lang:golang, star:39, 2016/09/23)
 
 ---
 * written by Alex Stocks on 2016/09/23
