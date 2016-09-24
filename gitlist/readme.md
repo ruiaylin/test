@@ -94,6 +94,12 @@ Here is a github repository list.
 - devops
 * [checkup](https://github.com/sourcegraph/checkup) - Checkup is distributed, lock-free, self-hosted health checks and status pages, written in Go.(lang:golang, star:1544, 2016/09/23)
 
+- blockchain
+* [go-ethereum](https://github.com/ethereum/go-ethereum) - Official golang implementation of the Ethereum protocol.(lang:golang, star:2163, 2016/09/24)
+
+- doc
+* [Qix](https://github.com/ty4z2008/Qix) - Machine Learning、Deep Learning、PostgreSQL、Distributed System、Node.Js、Golang.(lang:markdown, star:4774, 2016/09/24)
+
 ---
 ## kafka
 * [kafka-manager](https://github.com/yahoo/kafka-manager) - A tool for managing Apache Kafka. (lang: scala, star:2717, 2016/09/23)
@@ -109,7 +115,6 @@ Here is a github repository list.
 * [bild](https://github.com/anthonynsimon/bild) - A collection of parallel image processing algorithms in pure Go.(lang:golang, star:1158, 2016/09/23)
 * [DslrDashboardServer](https://github.com/hubaiz/DslrDashboardServer) - DslrDashboardServer (ddserver) allows network connections (wired/wireless) for connected USB imaging devices (DSLR cameras) to DslrDashboard. It can provide multiple USB camera connections to same or different DslrDashboard client. It is primary writen for OpenWrt (TP-Link MR3040 or WR703N) but it will run on any Linux distribution including Raspbery Pi or pcDuino for example.(lang C++, star:59, 2016/09/23)
 * [DslrDashboard](https://github.com/hubaiz/DslrDashboard) - DslrDashboard.(lang:java, star:44, 2016/09/23)
-* []() - .(lang, star:, 2016/09/23)
 
 ---
 ## Redis
@@ -120,3 +125,4 @@ Here is a github repository list.
 
 ---
 * written by Alex Stocks on 2016/09/23
+* add go-ethereum & Qix on 2016/09/24
