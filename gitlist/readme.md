@@ -30,6 +30,7 @@ Here is a github repository list.
 ---
 ## docker
 * [docker-cloud-platform](https://github.com/junneyang/docker-cloud-platform) - 使用Docker构建云平台，Docker云平台系列共三讲，Docker基础、Docker进阶、基于Docker的云平台方案.(star:3, 2016/09/23)
+* [openshift](https://github.com/openshift/origin) - OpenShift Origin is a distribution of Kubernetes optimized for continuous application development and multi-tenant deployment. Origin adds developer and operations-centric tools on top of Kubernetes to enable rapid application development, easy deployment and scaling, and long-term lifecycle maintenance for small and large teams.(lang:golang, star:1768, 2016/09/25)
 
 ---
 ## dubbo
@@ -100,6 +101,9 @@ Here is a github repository list.
 - doc
 * [Qix](https://github.com/ty4z2008/Qix) - Machine Learning、Deep Learning、PostgreSQL、Distributed System、Node.Js、Golang.(lang:markdown, star:4774, 2016/09/24)
 
+- encode
+* [simplifiedchinese](golang.org/x/text/encoding/simplifiedchinese) - Package simplifiedchinese provides Simplified Chinese encodings such as GBK.(lang:golang, 2016/09/25)
+
 ---
 ## kafka
 * [kafka-manager](https://github.com/yahoo/kafka-manager) - A tool for managing Apache Kafka. (lang: scala, star:2717, 2016/09/23)
@@ -124,5 +128,6 @@ Here is a github repository list.
 * [go-redis](https://github.com/fiorix/go-redis) - go-redis is a Redis client library for the Go programming language. It's built on the skeleton of gomemcache.(lang:golang, star:39, 2016/09/23)
 
 ---
-* written by Alex Stocks on 2016/09/23
-* add go-ethereum & Qix on 2016/09/24
+* written by Alex Stocks 2016/09/23
+* add go-ethereum & Qix 2016/09/24
+* add simplifiedchinese & openshift  2016/09/25
