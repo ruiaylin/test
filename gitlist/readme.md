@@ -86,8 +86,9 @@ Here is a github repository list.
 * [awesome-go](https://github.com/avelino/awesome-go) - A curated list of awesome Go frameworks, libraries and software.(lang:golang, star:15112, 2016/09/23)
 * [golang-open-source-projects](https://github.com/hackstoic/golang-open-source-projects/blob/master/golang-open-source-projects.md) - 为互联网IT人打造的中文版awesome-go.(lang:markdown, star:81, 2016/09/23)
 
-- kafka & zookeeper
+- kafka & zookeeper & elk
 * [logkafka](https://github.com/Qihoo360/logkafka) - Collect logs and send lines to Apache Kafka.(lang:golang, star:282, 2016/09/23)
+* [udpbeat](https://github.com/gravitational/udpbeat) - ELK beat that collects the structured inputs via UDP and emits them to ELK Status: expermental, use at your own risk.(lang:markdown, star:3, 2016/09/30)
 
 - database
 * [RationalDb](https://github.com/senarukana/RationalDb) - RationalDB is a trial distributed database middleware for k/v storage engine based on Vitess.(lang:golang, star:11, 2016/09/23)
@@ -131,3 +132,4 @@ Here is a github repository list.
 * written by Alex Stocks 2016/09/23
 * add go-ethereum & Qix 2016/09/24
 * add simplifiedchinese & openshift  2016/09/25
+* add udpbeat 2016/09/30
