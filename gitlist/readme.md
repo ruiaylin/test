@@ -59,6 +59,7 @@ Here is a github repository list.
 * [utils](https://github.com/golangers/utils) - convert struct to map.(lang:golang, star:6, 2016/09/23)
 * [gods](https://github.com/emirpasic/gods) - Go Data Structures. Containers, Sets, Lists, Stacks, Maps, BidiMaps, Trees, HashSet, TreeSet, ArrayList, SinglyLinkedList, DoublyLinkedList, LinkedListStack, ArrayStack, HashMap, TreeMap, HashBidiMap, TreeBidiMap, RedBlackTree, BTree, BinaryHeap, Comparator, Iterator, Enumerable, Sort.(lang:golang, star:2112, 2016/09/23)
 * [bytes](https://github.com/qiniu/bytes) - Extension module of golang bytes processing.(lang:golang, star:9, 2016/09/23)
+* [timer_server](https://github.com/liberalman/timer_server) - a golang timer implemented by time wheel.(lang:golang, star:3, 2016/10/01)
 
 - system
 * [goid](https://github.com/sillyousu/goid) - obtain goroutine id outside go runtime. linux/amd64 go1.6.(lang:golang, star:3, 2016/09/23)
@@ -133,3 +134,4 @@ Here is a github repository list.
 * add go-ethereum & Qix 2016/09/24
 * add simplifiedchinese & openshift  2016/09/25
 * add udpbeat 2016/09/30
+* add timer_server 2016/10/01
