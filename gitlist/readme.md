@@ -78,6 +78,10 @@ Here is a github repository list.
 * [socks](https://github.com/h12w/socks) - A SOCKS (SOCKS4, SOCKS4A and SOCKS5) Proxy Package for Go.(lang:golang, star:135, 2016/09/23)
 * [dht](https://github.com/nictuku/dht) - This is a golang Kademlia/Bittorrent DHT library that implements BEP 5. It's typically used by a torrent client such as Taipei-Torrent, but it could also be used by a standalone DHT routers, or for other more creative purposes.(lang:golang, star:386, 2016/09/23)
 * [doorman](https://github.com/youtube/doorman) - Doorman is a solution for Global Distributed Client Side Rate Limiting. Clients that talk to a shared resource (such as a database, a gRPC service, a RESTful API, or whatever) can use Doorman to voluntarily limit their use (usually in requests per second) of the resource. Doorman is written in Go and uses gRPC as its communication protocol. For some high-availability features it needs a distributed lock manager. We currently support etcd, but it should be relatively simple to make it use Zookeeper instead.(lang:golang, star:790, 2016/09/23)
+* [http-proxy](https://github.com/getlantern/http-proxy) - HTTP Proxy with TLS support. This proxy is built around the classical Middleware pattern. You can see examples in the forward and httpconnect packges. They can be chained together forming a series of filters. (lang:golang, star:32, 2016/10/02)
+* [websockets](https://github.com/getlantern/websockets) - This project is a simplistic benchmark of WebSocket performance. It includes a client and server.(lang:golang, star:0, 2016/09/23)
+* [qqwry](https://github.com/yinheli/qqwry) - 纯真IP库 golang 版.(lang:golang, star:54, 2016/10/02)
+* [gocoroutine](https://github.com/davyxu/gocoroutine) - 为游戏服务器设计的coroutine实现.(lang:golang, star:3, 2016/10/02)
 
 - log
 * [zap](https://github.com/uber-go/zap) - Blazing fast, structured, leveled logging in Go.(lang:golang, star:1176, 2016/09/23)
@@ -135,3 +139,4 @@ Here is a github repository list.
 * add simplifiedchinese & openshift  2016/09/25
 * add udpbeat 2016/09/30
 * add timer_server 2016/10/01
+* add http-proxy & websockets & qqwry 2016/10/02
