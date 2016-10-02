@@ -12,7 +12,6 @@ Here is a github repository list.
 	- [kafka](#kafka tool list)
 	- [Mysql](#mysql tool list)
 	- [Multimedia](#image prcess & digit camera)
-	- [Redis](#redis libs)
 
 ---
 ## alg
@@ -125,13 +124,6 @@ Here is a github repository list.
 * [bild](https://github.com/anthonynsimon/bild) - A collection of parallel image processing algorithms in pure Go.(lang:golang, star:1158, 2016/09/23)
 * [DslrDashboardServer](https://github.com/hubaiz/DslrDashboardServer) - DslrDashboardServer (ddserver) allows network connections (wired/wireless) for connected USB imaging devices (DSLR cameras) to DslrDashboard. It can provide multiple USB camera connections to same or different DslrDashboard client. It is primary writen for OpenWrt (TP-Link MR3040 or WR703N) but it will run on any Linux distribution including Raspbery Pi or pcDuino for example.(lang C++, star:59, 2016/09/23)
 * [DslrDashboard](https://github.com/hubaiz/DslrDashboard) - DslrDashboard.(lang:java, star:44, 2016/09/23)
-
----
-## Redis
-* [miniredis](https://github.com/alicebob/miniredis) - Pure Go Redis test server, used in Go unittests. Sometimes you want to test code which uses Redis, without making it a full-blown integration test. Miniredis implements (parts of) the Redis server, to be used in unittests.(lang:golang, star:294, 2016/09/23)
-* [redeo](https://github.com/bsm/redeo) - High-performance framework for building redis-protocol compatible TCP servers/services. Optimised for speed!(lang:golang, star:108, 2016/09/23)
-* [libredis](https://github.com/therealbill/libredis) - Libredis is intended to be more than a simple client connection library. It will include Redis specific custom operations, Structures, and capabilities suitable for integrating with any Go code which interacts with Redis ranging from simple CRUD operations to service management.(lang:golang, star:8, 2016/09/23)
-* [go-redis](https://github.com/fiorix/go-redis) - go-redis is a Redis client library for the Go programming language. It's built on the skeleton of gomemcache.(lang:golang, star:39, 2016/09/23)
 
 ---
 * written by Alex Stocks 2016/09/23
