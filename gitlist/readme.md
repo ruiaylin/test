@@ -109,6 +109,10 @@ Here is a github repository list.
 - encode
 * [simplifiedchinese](golang.org/x/text/encoding/simplifiedchinese) - Package simplifiedchinese provides Simplified Chinese encodings such as GBK.(lang:golang, 2016/09/25)
 
+- pusher & im
+* [redis](https://github.com/go-redis/redis) - Redis client for Golang.(lang:golang, star:1109, 2016/10/03)
+* [gorush](https://github.com/appleboy/gorush) - A push notification server written in Go (Golang).(lang:golang, star:302, 2016/10/03)
+
 ---
 ## kafka
 * [kafka-manager](https://github.com/yahoo/kafka-manager) - A tool for managing Apache Kafka. (lang: scala, star:2717, 2016/09/23)
@@ -132,3 +136,5 @@ Here is a github repository list.
 * add udpbeat 2016/09/30
 * add timer_server 2016/10/01
 * add http-proxy & websockets & qqwry 2016/10/02
+* add redis(redis client) & gorush 2016/10/03
+
