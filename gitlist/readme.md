@@ -23,6 +23,8 @@ Here is a github repository list.
 ## C++
 * [awesome-cpp](https://github.com/fffaraz/awesome-cpp) - A curated list of awesome C/C++ frameworks, libraries, resources, and shiny things. Inspired by awesome-... stuff.(lang:markdown, star:6153, 2016/09/23)
 * [8cc](https://github.com/rui314/8cc) - 8cc is a compiler for the C programming language. It's intended to support all C11 language features while keeping the code as small and simple as possible. The compiler is able to compile itself. You can see its code both as an implementation of the C language and as an example of what this compiler is able to compile.(lang: C, star:2385, 2016/10/10)
+* [c4](https://github.com/rswier/c4) - C in four functions. An exercise in minimalism.(lang: C, star:3358, 2016/10/10)
+* [write-a-C-interpreter](https://github.com/lotabout/write-a-C-interpreter) - Write a simple interpreter of C. Inspired by c4 and largely based on it.(lang: C, star:347, 2016/10/10)
 
 ---
 ## devops
@@ -83,6 +85,7 @@ Here is a github repository list.
 * [websockets](https://github.com/getlantern/websockets) - This project is a simplistic benchmark of WebSocket performance. It includes a client and server.(lang:golang, star:0, 2016/09/23)
 * [qqwry](https://github.com/yinheli/qqwry) - 纯真IP库 golang 版.(lang:golang, star:54, 2016/10/02)
 * [gocoroutine](https://github.com/davyxu/gocoroutine) - 为游戏服务器设计的coroutine实现.(lang:golang, star:3, 2016/10/02)
+* [snet](https://github.com/funny/snet) - A long lasting connection protocol for mobile applications that supports reconnection and encryption.(lang:golang & C#, star:37, 2016/10/10)
 
 - log
 * [zap](https://github.com/uber-go/zap) - Blazing fast, structured, leveled logging in Go.(lang:golang, star:1176, 2016/09/23)
@@ -150,5 +153,5 @@ Here is a github repository list.
 * add timer_server 2016/10/01
 * add http-proxy & websockets & qqwry 2016/10/02
 * add redis(redis client) & gorush 2016/10/03
-* add Wechat & self-driving-car & 8cc 2016/10/10
+* add Wechat & self-driving-car & 8cc & c4 & write-a-C-interpreter & snet 2016/10/10
 
