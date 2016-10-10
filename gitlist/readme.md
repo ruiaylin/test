@@ -12,6 +12,7 @@ Here is a github repository list.
 	- [kafka](#kafka tool list)
 	- [Mysql](#mysql tool list)
 	- [Multimedia](#image prcess & digit camera)
+	- [Wechat](#Wechat)
 
 ---
 ## alg
@@ -21,6 +22,7 @@ Here is a github repository list.
 ---
 ## C++
 * [awesome-cpp](https://github.com/fffaraz/awesome-cpp) - A curated list of awesome C/C++ frameworks, libraries, resources, and shiny things. Inspired by awesome-... stuff.(lang:markdown, star:6153, 2016/09/23)
+* [8cc](https://github.com/rui314/8cc) - 8cc is a compiler for the C programming language. It's intended to support all C11 language features while keeping the code as small and simple as possible. The compiler is able to compile itself. You can see its code both as an implementation of the C language and as an example of what this compiler is able to compile.(lang: C, star:2385, 2016/10/10)
 
 ---
 ## devops
@@ -128,6 +130,17 @@ Here is a github repository list.
 * [bild](https://github.com/anthonynsimon/bild) - A collection of parallel image processing algorithms in pure Go.(lang:golang, star:1158, 2016/09/23)
 * [DslrDashboardServer](https://github.com/hubaiz/DslrDashboardServer) - DslrDashboardServer (ddserver) allows network connections (wired/wireless) for connected USB imaging devices (DSLR cameras) to DslrDashboard. It can provide multiple USB camera connections to same or different DslrDashboard client. It is primary writen for OpenWrt (TP-Link MR3040 or WR703N) but it will run on any Linux distribution including Raspbery Pi or pcDuino for example.(lang C++, star:59, 2016/09/23)
 * [DslrDashboard](https://github.com/hubaiz/DslrDashboard) - DslrDashboard.(lang:java, star:44, 2016/09/23)
+* [self-driving-car](https://github.com/udacity/self-driving-car) - Information about the Udacity open source self-driving car project https://udacity.com/self-driving-car.(lang:markdown, star:896, 2016/10/10)
+
+---
+## Wechat
+* [awesome-wechat-weapp](https://github.com/justjavac/awesome-wechat-weapp) - 微信小程序开发资源汇总.(lang:markdown, star:2879, 2016/10/10)
+* [Mojo-Weixin](https://github.com/sjdy521/Mojo-Weixin) - 使用Perl语言编写的微信/weixin/wechat客户端框架（非GUI），可通过插件提供基于HTTP协议的api接口供其他语言或系统调用.(lang:perl, star:149, 2016/10/10)
+* [Mojo-StrawberryPerl](https://github.com/sjdy521/Mojo-StrawberryPerl) - 基于StrawberryPerl打包而成的包含Perl-5.24+cpanm+Mojo-Webqq+Mojo-Weixin的完整Windows运行环境.(lang:perl, star:1, 2016/10/10)
+* [Wechat(C#)](https://github.com/0x5e/WeChat) - 模拟网页版接口做的C#版本.(lang:C#, star:55, 2016/10/10)
+* [Wechat(php)](https://github.com/dodgepudding/wechat-php-sdk) - 微信公众平台php开发包.(lang:php, star:2966, 2016/10/10)
+* [SimpleQQClient](https://github.com/yjfxfjch/SimpleQQClient) - A simple client for QQ and WeChat .Embed WebQQ and web WeChat into two webbrowser AxtiveX Control in MFC dialog.(lang:C++, star:1, 2016/10/10)
+* [mpusher](https://github.com/mpusher) - mpush，是一款基于Netty开源的实时消息推送系统，采用java语言开发.(lang:Java, star:466, 2016/10/10)
 
 ---
 * written by Alex Stocks 2016/09/23
@@ -137,4 +150,5 @@ Here is a github repository list.
 * add timer_server 2016/10/01
 * add http-proxy & websockets & qqwry 2016/10/02
 * add redis(redis client) & gorush 2016/10/03
+* add Wechat & self-driving-car & 8cc 2016/10/10
 
