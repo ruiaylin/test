@@ -118,6 +118,9 @@ Here is a github repository list.
 * [redis](https://github.com/go-redis/redis) - Redis client for Golang.(lang:golang, star:1109, 2016/10/03)
 * [gorush](https://github.com/appleboy/gorush) - A push notification server written in Go (Golang).(lang:golang, star:302, 2016/10/03)
 
+- compiler
+* [pygo](https://github.com/sbinet/pygo) - pygo is WIP project to implement a python interpreter in the Go programming language. pygo is a learning vehicule for interpreter technologies.(lang:golang, star:13, 2016/10/14)
+
 ---
 ## kafka
 * [kafka-manager](https://github.com/yahoo/kafka-manager) - A tool for managing Apache Kafka. (lang: scala, star:2717, 2016/09/23)
@@ -154,4 +157,5 @@ Here is a github repository list.
 * add http-proxy & websockets & qqwry 2016/10/02
 * add redis(redis client) & gorush 2016/10/03
 * add Wechat & self-driving-car & 8cc & c4 & write-a-C-interpreter & snet 2016/10/10
+* add pygo 2016/10/14
 
