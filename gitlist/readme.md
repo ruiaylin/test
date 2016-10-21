@@ -70,6 +70,7 @@ Here is a github repository list.
 * [go_reuseport](https://github.com/kavu/go_reuseport) - GO_REUSEPORT is a little expirement to create a net.Listener that supports SO_REUSEPORT socket option.(lang:golang, star:160, 2016/09/23)
 * [go-deamon](https://github.com/sevlyar/go-daemon) - A library for writing system daemons in golang.(lang:golang, star:339, 2016/09/23)
 * [go-exit](https://github.com/simia-tech/go-exit) - An exit strategy for go routines.(lang:golang, star:52, 2016/09/23)
+* [gocui](https://github.com/jroimartin/gocui) - Minimalist Go package aimed at creating Console User Interfaces.(lang:golang, star:961, 2016/10/21)
 
 - network
 * [link](https://github.com/funny/link) - link包的核心是Session，Session的字面含义是会话，就是一次对话过程。每一个连接的生命周期被表达为一个会话过程，这个过程中通讯双方的消息有来有往。.(lang:golang, star:572, 2016/09/23)
@@ -158,4 +159,6 @@ Here is a github repository list.
 * add redis(redis client) & gorush 2016/10/03
 * add Wechat & self-driving-car & 8cc & c4 & write-a-C-interpreter & snet 2016/10/10
 * add pygo 2016/10/14
+* add gocui 2016/10/21
+
 
