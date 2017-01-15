@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="GOPATH &lt;freak-msg&gt;">
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/../lib/src/github.com" />
+      <root url="file://$PROJECT_DIR$/../lib/src/bin" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+    <excluded>
+      <root url="file://$PROJECT_DIR$" />
+    </excluded>
+  </library>
+</component>
