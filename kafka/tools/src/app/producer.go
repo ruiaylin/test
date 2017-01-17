@@ -84,7 +84,7 @@ func gcm_producer() {
 	*value = `{
 		"os":2,
 		"app_id":1,
-		"token": "cJAlmwiffkA:APA91bFiYUle7ETJLnSuPyDTnPgIs3kZg8-QCBuh1DV6WIlDSWJhAXd47LD9GMkuicxhqCNQSwsUqUbDhsvJmqHA_aODD8dD91akDioJ3PJLxKBaYX703z46mB-sge-gBT-A04AxHdoM",
+		"token": "cJAlmwiffkA:APA",
 		"payload": "{\"message\": {\"content\": \"gcm-content\", \"title\": \"gcm-title\"}, \"open_url\": \"local://live?room_id=u4850311483077144030001222&show_id=7814842859\", \"extra\": { \"type\": \"uid\", \"id\": \"a4d82062-d952-11e6-801b-002590f3b4ae\" }}"
 	}`
 
@@ -128,7 +128,7 @@ func apns_producer() {
 		"plan_id": 17,
 		"os": 1,
 		"app_id": 1,
-		"token": "ffe3cd80cfc44fed3faaeef11a21593e5e9b0bbb3f05a6fdaaf9aa1794f2e782",
+		"token": "ffe3cd80c",
 		"payload": "{\"aps\": {\"sound\": \"\", \"badge\": 1, \"alert\": \"apns-alert\"}, \"open_url\": \"local://live?room_id=u4850311483077144030001222&show_id=7814842859\", \"extra\": {\"type\": \"uid\", \"id\": \"a4d82062-d952-11e6-801b-002590f3b4ae\"}}"
 	}`
 
