@@ -16,6 +16,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	// "encoding/json"
 )
 
 import (
@@ -24,7 +25,7 @@ import (
 )
 
 var (
-	pf          = flag.String("platform", "i", "os platform (e.g. `i` = iOS, `a` = Android)")
+	platform    = flag.String("platform", "i", "os platform (e.g. `i` = iOS, `a` = Android)")
 	zookeeper   = flag.String("zookeeper", "", "A comma-separated Zookeeper connection string (e.g. `zookeeper1.local:2181,zookeeper2.local:2181,zookeeper3.local:2181`)")
 	brokerList  = flag.String("brokers", "", "The comma separated list of brokers in the Kafka cluster")
 	topic       = flag.String("topic", "", "The topic to produce to")
@@ -83,9 +84,10 @@ func gcm_producer() {
 	*value = `{
 		"os":2,
 		"app_id":1,
-		"token": "fZAFJfdiqjw:APA91bGIpdPyt6oUmTR2dcgx7dwGeN212Bc8VSJdtheeXkfI8oQmh6OtEKr9y7Yo0pRzI--ydShJYesemOTjrh4omN3dPsGS7Ir1mjiA2oONhBDpjyvdiAInhVb5w-d9_oUaIj3D1UjW",
+		"token": "cJAlmwiffkA:APA91bFiYUle7ETJLnSuPyDTnPgIs3kZg8-QCBuh1DV6WIlDSWJhAXd47LD9GMkuicxhqCNQSwsUqUbDhsvJmqHA_aODD8dD91akDioJ3PJLxKBaYX703z46mB-sge-gBT-A04AxHdoM",
 		"payload": "{\"message\": {\"content\": \"gcm-content\", \"title\": \"gcm-title\"}, \"open_url\": \"local://live?room_id=u4850311483077144030001222&show_id=7814842859\", \"extra\": { \"type\": \"uid\", \"id\": \"a4d82062-d952-11e6-801b-002590f3b4ae\" }}"
 	}`
+
 	// fmt.Println(*zookeeper, *brokerList)
 	if *zookeeper != "" && *brokerList == "" {
 		brokerArray, err := kafka.GetBrokerList(*zookeeper)
@@ -104,7 +106,7 @@ func gcm_producer() {
 	}
 	defer producer.Close()
 
-	partition, offset, err := producer.SendMessage(*topic, *key, *value)
+	partition, offset, err := producer.SendBytes(*topic, []byte(*key), []byte(*value))
 	if err != nil {
 		logger.Println("FAILED to produce message:", err)
 	} else {
@@ -123,11 +125,20 @@ func apns_producer() {
 	*partitioner = "hash"
 	*key = "nihao"
 	*value = `{
+		"plan_id": 17,
 		"os": 1,
 		"app_id": 1,
-		"token": "3e26927c4fa4b10099483deb86182bdcaa42da0f104dc68f1d00b65e776d29c4",
+		"token": "ffe3cd80cfc44fed3faaeef11a21593e5e9b0bbb3f05a6fdaaf9aa1794f2e782",
 		"payload": "{\"aps\": {\"sound\": \"\", \"badge\": 1, \"alert\": \"apns-alert\"}, \"open_url\": \"local://live?room_id=u4850311483077144030001222&show_id=7814842859\", \"extra\": {\"type\": \"uid\", \"id\": \"a4d82062-d952-11e6-801b-002590f3b4ae\"}}"
 	}`
+
+	// *value = `{
+	// 	"plan_id": 17,
+	// 	"os": 1,
+	// 	"app_id": 1,
+	// 	"token": "ffe3cd80cfc44fed3faaeef11a21593e5e9b0bbb3f05a6fdaaf9aa1794f2e782",
+	// 	"payload": "payload"
+	// }`
 
 	// fmt.Println(*zookeeper, *brokerList)
 	if *zookeeper != "" && *brokerList == "" {
@@ -149,7 +160,7 @@ func apns_producer() {
 	}
 	defer producer.Close()
 
-	partition, offset, err := producer.SendMessage(*topic, *key, *value)
+	partition, offset, err := producer.SendBytes(*topic, []byte(*key), []byte(*value))
 	if err != nil {
 		logger.Println("FAILED to produce message:", err)
 	} else {
@@ -158,9 +169,10 @@ func apns_producer() {
 }
 
 func main() {
+	flag.StringVar(platform, "p", "i", "os platform (e.g. `i` = iOS, `a` = Android)")
 	flag.Parse()
 
-	switch *pf {
+	switch *platform {
 	case "i":
 		apns_producer()
 	case "a":
