@@ -16,12 +16,9 @@ from kafka import KafkaConsumer
 
 from calculator import *
 
-brokers="localhost:9092,localhost:19092,localhost:29092"
-# brokers="127.0.0.1:9092,127.0.0.1:19092,127.0.0.1:29092"
 def python_kafka_consumer_performance():
     consumer = KafkaConsumer(
-        # bootstrap_servers=bootstrap_servers.split(","),
-        bootstrap_servers=brokers.split(","),
+        bootstrap_servers=bootstrap_servers.split(","),
         auto_offset_reset = 'earliest', # start at earliest topic
         # api_version = (0, 10),
         group_id = None # do no offest commit
