@@ -28,7 +28,7 @@ def python_kafka_producer_performance():
         print msg_payload
         # import pdb; pdb.set_trace()
         try:
-            time.sleep(3)
+            time.sleep(1)
             producer.send(topic, key=msg_payload, value=bytes(msg_payload))
         except Exception as e:
             print 'exception:', e
