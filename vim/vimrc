@@ -11,7 +11,23 @@ set nocp
 "hi Normal ctermgb=#006699 guibg=green
 set nocompatible
 set confirm
-if has("linux")
+let os=""
+" Get running OS
+let os = ""
+if has("win32")
+  let os="win"
+else
+  if has("unix")
+    let suname = substitute(system('uname'), '\n', '', '')
+    if suname == "Darwin"
+      let os="mac"
+    else
+      let os="unix"
+    endif
+  endif
+endif
+
+if os == ("unix") || os == ("mac")
     set shell=/bin/bash
 endif
 "echo $VIM
@@ -52,17 +68,21 @@ set backspace=2
 set selection=exclusive
 "when display characters
 set termencoding=chinese
+nmap <leader>ec :set encoding=chinese<CR>
+nmap <leader>eu :set encoding=utf-8<CR>
 "when open files
-"if has("multi_byte")
-	" set fileformats=unix,mac,dos
+if has("multi_byte")
+    " set fileformats=unix,mac,dos
     set fencs=utf-8,ucs-bom,shift-jis,gb18030,gbk,gb2312,cp936,latin1 "gb2312 in unix and cp936 in windows is chinese
     "vim buffer encoding, for copy & delete
-    if has("win32")
+    " if os == ("win32") || os == ("mac")
+    if os == ("win32")
         set encoding=chinese
     else
         set encoding=utf-8
     endif
-"    when create new files
+
+" when create new files
     set fileencoding=utf-8
     if v:lang =~?'^\(zh\)\|\(ja\)\|\(ko\)'
         set ambiwidth=double
@@ -72,11 +92,14 @@ set termencoding=chinese
         source $VIMRUNTIME/menu.vim
 "        language messages zh_CN.utf-8
     endif
-"else
-"    echoerr "sorry, vim can not support multi_byte."
-"endif
-if has("win32")
+else
+    echoerr "sorry, vim can not support multi_byte."
+endif
+
+if os == ("win32")
     set guifont=Consolas:h14:cANSI
+elseif os == ("mac")
+	set guifont=Inconsolata-dz:h12
 else
     set guifont=Monospace\ 14
 endif
@@ -86,6 +109,9 @@ set sessionoptions+=sesdir
 "与windows共享剪贴板
 set clipboard+=unnamed
 set nu
+" set relativenumber
+" noremap <silent> <expr> j (v:count==0?'gj':'j')
+" noremap <silent> <expr> k (v:count==0?'gk':'k')
 " 保存全局变量
 set viminfo+=!
 " 带有如下符号的单词不要被换行分割
@@ -145,7 +171,7 @@ func! AddTitle()
 		call append(2, "# DESC    : ")
 		call append(3, "# AUTHOR  : Alex Stocks")
 		call append(4, "# VERSION : 1.0")
-		call append(5, "# LICENCE : LGPL V3")
+		call append(5, "# LICENCE : Apache License 2.0")
 		call append(6, "# EMAIL   : alexstocks@foxmail.com")
 		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(8, "# FILE    : ".expand("%:t"))
@@ -155,7 +181,7 @@ func! AddTitle()
 		call append(1, "# DESC    : ")
 		call append(2, "# AUTHOR  : Alex Stocks")
 		call append(3, "# VERSION : 1.0")
-		call append(4, "# LICENCE : LGPL V3")
+		call append(4, "# LICENCE : Apache License 2.0")
 		call append(5, "# EMAIL   : alexstocks@foxmail.com")
 		call append(6, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(7, "# FILE    : ".expand("%:t"))
@@ -179,7 +205,7 @@ func! AddTitle()
 		call append(1, "# DESC    : ")
 		call append(2, "# AUTHOR  : Alex Stocks")
 		call append(3, "# VERSION : 1.0")
-		call append(4, "# LICENCE : LGPL V3")
+		call append(4, "# LICENCE : Apache License 2.0")
 		call append(5, "# EMAIL   : alexstocks@foxmail.com")
 		call append(6, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(7, "# FILE    : ".expand("%:t"))
@@ -201,7 +227,7 @@ func! AddTitle()
 		call append(1, "// DESC    : ")
 		call append(2, "// AUTHOR  : Alex Stocks")
 		call append(3, "// VERSION : 1.0")
-		call append(4, "// LICENCE : LGPL V3")
+		call append(4, "// LICENCE : Apache License 2.0")
 		call append(5, "// EMAIL   : alexstocks@foxmail.com")
 		call append(6, "// MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(7, "// FILE    : ".expand("%:t"))
@@ -217,7 +243,7 @@ func! AddTitle()
 		call append(1, "# DESC    : ")
 		call append(2, "# AUTHOR  : Alex Stocks")
 		call append(3, "# VERSION : 1.0")
-		call append(4, "# LICENCE : LGPL V3")
+		call append(4, "# LICENCE : Apache License 2.0")
 		call append(5, "# EMAIL   : alexstocks@foxmail.com")
 		call append(6, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(7, "# FILE    : ".expand("%:t"))
@@ -239,7 +265,7 @@ func! AddTitle()
 		call append(3, "# DESC    : ")
 		call append(4, "# AUTHOR  : Alex Stocks")
 		call append(5, "# VERSION : 1.0")
-		call append(6, "# LICENCE : LGPL V3")
+		call append(6, "# LICENCE : Apache License 2.0")
 		call append(7, "# EMAIL   : alexstocks@foxmail.com")
 		call append(8, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(9, "# FILE    : ".expand("%:t"))
@@ -250,7 +276,7 @@ func! AddTitle()
 		call append(2, "-- DESC    : ")
 		call append(3, "-- AUTHOR  : Alex Stocks")
 		call append(4, "-- VERSION : 1.0")
-		call append(5, "-- LICENCE : LGPL V3")
+		call append(5, "-- LICENCE : Apache License 2.0")
 		call append(6, "-- EMAIL   : alexstocks@foxmail.com")
 		call append(7, "-- MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(8, "-- FILE    : ".expand("%:t"))
@@ -261,7 +287,7 @@ func! AddTitle()
 		call append(2, "# DESC    : ")
 		call append(3, "# AUTHOR  : Alex Stocks")
 		call append(4, "# VERSION : 1.0")
-		call append(5, "# LICENCE : LGPL V3")
+		call append(5, "# LICENCE : Apache License 2.0")
 		call append(6, "# EMAIL   : alexstocks@foxmail.com")
 		call append(7, "# MOD     : ".strftime("%Y-%m-%d %H:%M"))
 		call append(8, "# FILE    : ".expand("%:t"))
@@ -748,10 +774,11 @@ func! DefineClass()
 		call append(line(".") + 3, " * @val          : value")
 		call append(line(".") + 4, " **/")
 		call append(line(".") + 5, "public class Test {")
-		call append(line(".") + 6, "    public static final int var = 3;")
-		call append(line(".") + 7, "    public Test() {}")
-		call append(line(".") + 8, "    public void exec() {}")
-		call append(line(".") + 9, "}")
+		call append(line(".") + 6, "    public static PrintStream sout = System.out;")
+		call append(line(".") + 7, "    public static final int var = 3;")
+		call append(line(".") + 8, "    public Test() {}")
+		call append(line(".") + 9, "    public void exec() {}")
+		call append(line(".") + 10, "}")
 		normal ddj4w
     elseif &filetype == "go"
         call append(line(".") + 0, "type tag interface {")
@@ -760,9 +787,9 @@ func! DefineClass()
         call append(line(".") + 3, "}")
 		normal ddjfokw
     elseif &filetype == "python"
-		call append(line(".") + 0, "class Father(GrandPa):")
+		call append(line(".") + 0, "class Father():")
 		call append(line(".") + 1, "    def __init__(self):")
-		call append(line(".") + 2, "    print('I\'m Father!')")
+		call append(line(".") + 2, "        print(\"I\'m Father!\")")
 		call append(line(".") + 3, "")
 		call append(line(".") + 4, "class Son(Father):")
 		call append(line(".") + 5, "    \"\"\" example \"\"\"")
@@ -1068,6 +1095,17 @@ func! InsertLineNum()
     1,$s/^[0-9]\{1,}\s\+//g     "\s\+ space
 endfunc
 
+"" CtrlP
+let g:ctrlp_user_command = ['.git/', 'git --git-dir=%s/.git ls-files -oc --exclude-standard']
+set wildignore+=*/tmp/*,*.so,*.swp,*.zip     " MacOSX/Linux
+set wildignore+=*\\tmp\\*,*.swp,*.zip,*.exe  " Windows
+
+let g:ctrlp_custom_ignore = '\v[\/]\.(git|hg|svn)$'
+set wildignore+=*/tmp/*,*.so,*.swp,*.zip     " MacOSX/Linux
+set wildignore+=*\\tmp\\*,*.swp,*.zip,*.exe  " Windows
+
+let g:ctrlp_custom_ignore = '\v[\/]\.(git|hg|svn)$'
+
 "F7 save&compile
 "autocmd FileType h,hpp,c,cc,cpp,cxx  nmap <leader>cscm  :call Compile()<CR>
 func! Compile()
@@ -1231,7 +1269,7 @@ nmap <leader>se        :e ./
 "nmap se  :call SaveAndEdit()<CR>
 function! SaveAndEdit()
     silent exec "w"
-    if has("win32")
+    if os == ("win32")
         let filename = inputdialog("Edit file: ", expand(""))
     else
         let filename = inputdialog("Edit file: ", expand("./"))
@@ -1300,10 +1338,10 @@ set helplang=cn
 " plugin TagList
 """""""""""""""""""""""""""""""
 filetype plugin on
-if has("win32")
-let Tlist_Ctags_Cmd = "D:/Program Files/Vim/vim73/ctags.exe"
+if os == ("win32")
+	let Tlist_Ctags_Cmd = "C:/Program Files (x86)/Console2/Vim/vim73/ctags.exe"
 else
-let Tlist_Ctags_Cmd = '/home/alex/bin/ctags'
+	let Tlist_Ctags_Cmd = '~/bin/ctags'
 endif
 let Tlist_Sort_Type                    = 'name'    "使taglist以tag名字进行排序
 let Tlist_Auto_Open                    = 0            "打开文件时候自动打开taglist
@@ -1315,14 +1353,14 @@ let Tlist_GainFocus_On_ToggleOpen    = 1            "使用:TlistToggle打开tag
 let Tlist_WinWidth                    = 25        "set window width
 "let    Tlist_WinHeight                    = 10    "set window height
 "let    Tlist_Use_Horiz_Window            = 10    "show window vertically
-if has("win32")
-nmap :!ctags-R -I __THROW -I __attribute_pure__ -I __nonnull -I __attribute__ --file-scope=yes --langmap=c:+.h --languages=c,c++ --links=yes --c-kinds=+p --c++-kinds=+p --fields=+lS --fields=+iaS --extra=+q  -f ~\\tags .\\*
-set autochdir
-set tags+=.\\tags "get tags automatically
+if os == ("win32")
+	nmap :!ctags-R -I __THROW -I __attribute_pure__ -I __nonnull -I __attribute__ --file-scope=yes --langmap=c:+.h --languages=c,c++ --links=yes --c-kinds=+p --c++-kinds=+p --fields=+lS --fields=+iaS --extra=+q  -f ~\\tags .\\*
+	set autochdir
+	set tags+=.\\tags "get tags automatically
 else
 "if has("linux")
-nmap :ctags -R -I __THROW -I __attribute_pure__ -I __nonnull -I __attribute__ --file-scope=yes --langmap=c:+.h --languages=c,c++ --links=yes --c-kinds=+p --c++-kinds=+p ---fields=+lS -fields=+iaS --extra=+q  -f ~/.vim/systags ~/*
-set tags+=~/.vim/systags
+	nmap :ctags -R -I __THROW -I __attribute_pure__ -I __nonnull -I __attribute__ --file-scope=yes --langmap=c:+.h --languages=c,c++ --links=yes --c-kinds=+p --c++-kinds=+p ---fields=+lS -fields=+iaS --extra=+q  -f ~/.vim/systags ~/*
+	set tags+=~/.vim/systags
 endif
 
 au GUIENTER * simalt ~x    "au = autocmd
@@ -1392,4 +1430,108 @@ autocmd FileType h,hpp,c,cc,cpp nmap    <leader>wp    :tabprev<CR>
 autocmd FileType h,hpp,c,cc,cpp nmap    <leader>wn    :tabnext<CR>
 autocmd FileType h,hpp,c,cc,cpp nmap    <leader>wf    :tabfirst<CR>
 autocmd FileType h,hpp,c,cc,cpp nmap    <leader>wl    :tablast<CR>
+
+"""""""""""""""""""""""""""""""
+"plugin vim-go-ide
+"""""""""""""""""""""""""""""""
+"set runtimepath^="~/.vim_go_runtime"
+"
+"source ~/.vim_go_runtime/vimrc/basic.vim
+"source ~/.vim_go_runtime/vimrc/filetypes.vim
+"source ~/.vim_go_runtime/vimrc/plugins.vim
+"source ~/.vim_go_runtime/vimrc/extended.vim
+"
+"try
+"  source ~/.vim_go_runtime/custom_config.vim
+"catch
+"endtry
+
+"""""""""""""""""""""""""""""""
+"plugin gotags
+"""""""""""""""""""""""""""""""
+let g:tagbar_type_go = {
+    \ 'ctagstype' : 'go',
+    \ 'kinds'     : [
+        \ 'p:package',
+        \ 'i:imports:1',
+        \ 'c:constants',
+        \ 'v:variables',
+        \ 't:types',
+        \ 'n:interfaces',
+        \ 'w:fields',
+        \ 'e:embedded',
+        \ 'm:methods',
+        \ 'r:constructor',
+        \ 'f:functions'
+    \ ],
+    \ 'sro' : '.',
+    \ 'kind2scope' : {
+        \ 't' : 'ctype',
+        \ 'n' : 'ntype'
+    \ },
+    \ 'scope2kind' : {
+        \ 'ctype' : 't',
+        \ 'ntype' : 'n'
+    \ },
+    \ 'ctagsbin'  : 'gotags',
+    \ 'ctagsargs' : '-sort -silent'
+\ }
+
+"""""""""""""""""""""""""""""""
+"plugin vundle
+"""""""""""""""""""""""""""""""
+set nocompatible              " be iMproved, required
+filetype off                  " required
+
+" set the runtime path to include Vundle and initialize
+set rtp+=~/.vim/bundle/Vundle.vim
+call vundle#begin()
+" alternatively, pass a path where Vundle should install plugins
+"call vundle#begin('~/some/path/here')
+
+" let Vundle manage Vundle, required
+Plugin 'VundleVim/Vundle.vim'
+
+" The following are examples of different formats supported.
+" Keep Plugin commands between vundle#begin/end.
+" plugin on GitHub repo
+" Plugin 'tpope/vim-fugitive'
+" plugin from http://vim-scripts.org/vim/scripts.html
+" Plugin 'L9'
+" Git plugin not hosted on GitHub
+" Plugin 'git://git.wincent.com/command-t.git'
+" git repos on your local machine (i.e. when working on your own plugin)
+" Plugin 'file:///home/gmarik/path/to/plugin'
+" The sparkup vim script is in a subdirectory of this repo called vim.
+" Pass the path to set the runtimepath properly.
+" Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
+" Install L9 and avoid a Naming conflict if you've already installed a
+" different version somewhere else.
+" Plugin 'ascenator/L9', {'name': 'newL9'}
+
+" myself
+Plugin 'https://github.com/klen/python-mode.git'
+Plugin 'https://github.com/flazz/vim-colorschemes.git'
+Plugin 'tpope/vim-fugitive'
+Plugin 'scrooloose/nerdtree'
+Plugin 'easymotion/vim-easymotion'
+Plugin 'jelera/vim-javascript-syntax'
+Plugin 'jacoborus/tender.vim'
+Plugin 'bling/vim-airline'
+Plugin 'valloric/youcompleteme'
+
+" All of your Plugins must be added before the following line
+call vundle#end()            " required
+filetype plugin indent on    " required
+" To ignore plugin indent changes, instead use:
+"filetype plugin on
+"
+" Brief help
+" :PluginList       - lists configured plugins
+" :PluginInstall    - installs plugins; append `!` to update or just :PluginUpdate
+" :PluginSearch foo - searches for foo; append `!` to refresh local cache
+" :PluginClean      - confirms removal of unused plugins; append `!` to auto-approve removal
+"
+" see :h vundle for more details or wiki for FAQ
+" Put your non-Plugin stuff after this line
 
