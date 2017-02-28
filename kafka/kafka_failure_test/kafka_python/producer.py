@@ -15,12 +15,16 @@ from kafka import KafkaProducer
 
 from calculator import *
 
+import pdb
+
 def python_kafka_producer_performance():
     brokers = bootstrap_servers.split(',')
     producer = KafkaProducer(
         bootstrap_servers=brokers,
-        max_block_ms=5000)
-        # api_version = (0, 10))
+        max_block_ms=15000,
+        retries=2)
+        # api_version = "0.10")
+    # pdb.set_trace()
 
     producer_start = time.time()
     for i in range(msg_count):
@@ -28,7 +32,7 @@ def python_kafka_producer_performance():
         print msg_payload
         # import pdb; pdb.set_trace()
         try:
-            time.sleep(1)
+            # time.sleep(1)
             producer.send(topic, key=msg_payload, value=bytes(msg_payload))
         except Exception as e:
             print 'exception:', e
