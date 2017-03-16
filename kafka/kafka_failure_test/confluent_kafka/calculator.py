@@ -12,7 +12,7 @@
 
 # bootstrap_servers = 'localhost:9092,localhost:19092,localhost:29092'
 bootstrap_servers = 'localhost:9092'
-topic = 'test0'
+topic = 'test3'
 msg_count = 1000000
 # msg_count = 1000
 msg_size = 100

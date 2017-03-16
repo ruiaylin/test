@@ -21,11 +21,13 @@ def python_kafka_consumer_performance():
         bootstrap_servers=bootstrap_servers.split(","),
         auto_offset_reset = 'earliest', # start at earliest topic
         # api_version = (0, 10),
-        group_id = None # do no offest commit
+        # group_id = None # do no offest commit
+        group_id='ikurento',
     )
     msg_consumed_count = 0
 
     consumer_start = time.time()
+    print 'topic:', topic
     consumer.subscribe([topic])
     for msg in consumer:
         print msg
