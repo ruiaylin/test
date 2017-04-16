@@ -1,4 +1,4 @@
-﻿# github repository list #
+# github repository list #
 
 Here is a github repository list.
 
@@ -102,6 +102,8 @@ Here is a github repository list.
 
 - database
 * [RationalDb](https://github.com/senarukana/RationalDb) - RationalDB is a trial distributed database middleware for k/v storage engine based on Vitess.(lang:golang, star:11, 2016/09/23)
+* [kingshard](https://github.com/flike/kingshard) - kingshard is a high-performance proxy for MySQL powered by Go. Just like other mysql proxies, you can use it to split the read/write sqls. Now it supports basic SQL statements (select, insert, update, replace, delete). The most important feature is the sharding function. Kingshard aims to simplify the sharding solution of MySQL. **The Performance of kingshard is about 80% compared to connecting to MySQL directly.**(star:2517, 2017/04/16)
+* [upper/db](https://github.com/upper/db) - The upper.io/db.v3 package([doc](https://upper.io/db.v3)) for Go is a productive data access layer for Go that provides a common interface to work with different data sources such as PostgreSQL, MySQL, SQLite, QL and MongoDB.(star:796, 2017/04/16)
 
 - devops
 * [checkup](https://github.com/sourcegraph/checkup) - Checkup is distributed, lock-free, self-hosted health checks and status pages, written in Go.(lang:golang, star:1544, 2016/09/23)
@@ -121,6 +123,9 @@ Here is a github repository list.
 
 - compiler
 * [pygo](https://github.com/sbinet/pygo) - pygo is WIP project to implement a python interpreter in the Go programming language. pygo is a learning vehicule for interpreter technologies.(lang:golang, star:13, 2016/10/14)
+
+- regex
+* [govalidator](github.com/asaskevich/govalidator) - A package of validators and sanitizers for strings, structs and collections. Based on validator.js.(star: 1741, 2017/04/16)
 
 ---
 ## kafka
@@ -160,5 +165,6 @@ Here is a github repository list.
 * add Wechat & self-driving-car & 8cc & c4 & write-a-C-interpreter & snet 2016/10/10
 * add pygo 2016/10/14
 * add gocui 2016/10/21
+* add kingshard & upper/db & govalidator 2017/04/16
 
 
