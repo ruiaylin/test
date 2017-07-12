@@ -1,0 +1,8 @@
+// dot -Tpng -O simple_graph.dot
+// 简单的无向图
+graph simple
+{
+    a -- b -- c;
+    b -- d;
+}
+

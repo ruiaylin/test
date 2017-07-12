@@ -1,0 +1,19 @@
+// ◇图的属性
+// 
+// 　　说完了“节点”和“连线”，最后稍微聊一下“图”本身的属性。
+// 　　常用的【属性名】包括如下：
+// label——标题
+// bgcolor——颜色
+// fontname——字体名称（【不】影响节点和连线）
+// fontsize——字体大小（【不】影响节点和连线）
+// fontcolor——字体颜色（【不】影响节点和连线）
+// center——是否居中绘制
+// （还有更多属性，可以参见官网“这个链接”）
+// 
+digraph graph_attr
+{
+    graph[bgcolor="cadetblue" label="图的标题" fontsize=24 fontcolor="green"];
+
+    node0 -> node1;
+    node0 -> node2;
+}
