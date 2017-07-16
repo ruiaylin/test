@@ -131,7 +131,7 @@ nmap <leader>cm :color murphy<CR>
 
 set formatoptions=tcrqn "自动格式化
 " 状态行显示的内容（包括文件类型和解码）
-set statusline=\ [File]\ %F%m%r%h%w\ [FORMAT=%{&ff}]\ [TYPE=%Y]\ [POS=%l,%v][%p%%]\ %{strftime(\"%d/%m/%y\ -\ %H:%M\")}\ %r%{CurrectDir()}%h\ %=\ [Line]%l/%L\ %=\[%P]
+set statusline=\ [File]\ %F%m%r%h%w\ [FORMAT=%{&ff}]\ [TYPE=%Y]\ [POS=%l,%v][%p%%]\ %{strftime(\"%d/%m/%y\ -\ %H:%M\")}\ %r%{CurrentDir()}%h\ %=\ [Line]%l/%L\ %=\[%P]
 ""set so = 3  "上下移动时，留三行
 set magic
 set cmdheight=1
@@ -1058,8 +1058,8 @@ func! RemoveNextDoubleChar(char)
     end
 endfunc
 
-""map dr :call CurrectDir()<CR>
-function! CurrectDir()
+""map dr :call CurrentDir()<CR>
+function! CurrentDir()
     return substitute(getcwd(), "", "", "g")
 endfunction
 
