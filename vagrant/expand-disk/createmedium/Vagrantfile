@@ -17,7 +17,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 			if ARGV[0] == "up" && ! File.exist?(file_to_disk)
 				puts "Creating 10GB disk #{file_to_disk}."
 				v.customize [
-					 'createhd',
+					 'createmedium',
 					 '--filename', file_to_disk,
 					 '--format', 'VDI',
 					 '--size', 10000 * 1024 # 10 GB

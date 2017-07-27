@@ -6,30 +6,12 @@ VAGRANTFILE_API_VERSION = "2"
 
 # vagrant plugin install vagrant-disksize
 # vagrant plugin install vagrant-persistent-storage
-# ref: https://github.com/kusnier/vagrant-persistent-storage/issues/22
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   (0..0).each do |i|
     config.vm.define vm_name = "node#{i}"  do |config|
         config.vm.provider "virtualbox" do |v|
             v.customize ["modifyvm", :id, "--name", vm_name, "--memory", "3072",'--cpus', 2]
-			file_to_disk = File.realpath( "." ).to_s + "/disk.vdi"
-			if ARGV[0] == "up" && ! File.exist?(file_to_disk)
-				puts "Creating 10GB disk #{file_to_disk}."
-				v.customize [
-					 'createhd',
-					 '--filename', file_to_disk,
-					 '--format', 'VDI',
-					 '--size', 10000 * 1024 # 10 GB
-					 ]
-				v.customize [
-					 'storageattach', :id,
-					 '--storagectl', 'SATA Controller',
-					 '--port', 1, '--device', 0,
-					 '--type', 'hdd',
-					 '--medium', file_to_disk
-					 ]
-			end
         end
         config.vm.box = "cdh"
 		config.disksize.size = '35GB'
@@ -37,6 +19,14 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         config.ssh.username = "vagrant"
         config.vm.network :private_network, ip: "192.168.100.10#{i}"
 	  	config.vm.provision :shell, :path => "bootstrap.sh"
+
+		config.persistent_storage.enabled = true
+		config.persistent_storage.location = "~/tmp/cdh.vdi"
+		config.persistent_storage.size = 1024000 # 10G
+		config.persistent_storage.mountname = 'cloudera'
+		config.persistent_storage.filesystem = 'ext2'
+		config.persistent_storage.mountpoint = '/opt/cloudera/'
+		config.persistent_storage.volgroupname = 'myvolgroup'
     end
   end
 end
