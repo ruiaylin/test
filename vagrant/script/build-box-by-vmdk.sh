@@ -36,16 +36,19 @@ VBoxManage setextradata "${BOX_NAME}" "VBoxInternal/Devices/e1000/0/LUN#0/Config
 VBoxManage setextradata "${BOX_NAME}" "VBoxInternal/Devices/e1000/0/LUN#0/Config/SSH/GuestPort" 22
 VBoxManage setextradata "${BOX_NAME}" "VBoxInternal/Devices/e1000/0/LUN#0/Config/SSH/HostPort" 22222
 
-VBoxManage modifyvm "${BOX_NAME}" --usb on --usbehci on
+# VBoxManage modifyvm "${BOX_NAME}" --usb on --usbehci on
 VBoxManage modifyvm "${BOX_NAME}" --memory 4096
 
 VBoxManage startvm "${BOX_NAME}" #--type headless
 
 echo "Sleeping to give machine time to boot"
-sleep 60
+sleep 360
 
 echo "Uploading ssh key & creating vagrant user"
-cat ~/.ssh/vagrant.pub | ssh -p 22222 root@localhost "umask 077; test -d .ssh || mkdir .ssh ; cat >> .ssh/authorized_keys"
+rm ./authorized_keys
+wget --no-check-certificate 'https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub' -O ./authorized_keys
+chmod 0666 ./authorized_keys
+cat ./authorized_keys | ssh -p 22222 root@localhost "umask 077; test -d .ssh || mkdir .ssh ; cat >> .ssh/authorized_keys"
 ssh -p 22222 root@localhost <<EOT
   useradd vagrant
   echo vagrant | passwd vagrant --stdin
