@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ******************************************************
-# DESC    : https://gist.github.com/vertis/4005946
+# DESC    :
 # AUTHOR  : Alex Stocks
 # VERSION : 1.0
 # LICENCE : Apache License 2.0
@@ -8,6 +8,8 @@
 # MOD     : 2017-07-28 15:53
 # FILE    : build-box-by-vmdk.sh
 # ******************************************************
+# ref: http://vertis.io/2012/11/02/creating-a-vagrant-base-box-from-an-existing-vmdk.html
+#      https://gist.github.com/vertis/4005946
 
 BOX_NAME=cdh-quick-start
 BASE_DIR="`pwd`/machines"
