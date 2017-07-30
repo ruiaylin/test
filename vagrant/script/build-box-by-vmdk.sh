@@ -44,6 +44,7 @@ VBoxManage startvm "${BOX_NAME}" #--type headless
 echo "Sleeping to give machine time to boot"
 sleep 360
 
+# 如果下面这些步骤不成功，可以待虚拟机创建完毕后，手工登录进去执行相关操作
 echo "Uploading ssh key & creating vagrant user"
 rm ./authorized_keys
 wget --no-check-certificate 'https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub' -O ./authorized_keys
@@ -54,7 +55,7 @@ ssh -p 22222 root@localhost <<EOT
   echo vagrant | passwd vagrant --stdin
   umask 077
   test -d /home/vagrant/.ssh || mkdir -p /home/vagrant/.ssh
-  cp ~/.ssh/authorized_keys /home/vagrant/.ssh
+  cp ./authorized_keys /home/vagrant/.ssh
   chown -R vagrant:vagrant /home/vagrant/.ssh
 EOT
 scp -P 22222 templates/sudoers root@localhost:/etc/sudoers
