@@ -1,6 +1,0 @@
-todolist: proxy
-
-[proxy]
-1 read conf
-2 white list, accept clients
-3 connect redis
