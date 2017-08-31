@@ -60,6 +60,8 @@ define  stop_threads
     set scheduler-locking on
 end
 
+# use dir command to set source directory
+# dir
 file bin/client_test
 #set args  0.0.0.0 8000 1
 set args ./conf/lisk.conf
