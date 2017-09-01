@@ -1,6 +1,6 @@
-#!/usr/bin/env bash  
+#!/usr/bin/env bash
 # ******************************************************
-# DESC    : PalmChat httpd instance devops script
+# DESC    : httpd instance devops script
 # AUTHOR  : Alex Stocks
 # VERSION : 1.0
 # LICENCE : LGPL V3

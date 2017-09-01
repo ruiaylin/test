@@ -1,1 +1,0 @@
-lib: 请使用libzookeeper_mt.a，否则测试async_client的时候，会得不到结果。

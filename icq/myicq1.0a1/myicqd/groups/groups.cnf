@@ -1,8 +1,0 @@
-# myicqd group-plugin config file
-# Each section represents one plugin
-
-[chatroom]
-name = 聊天室
-
-[gobang]
-name = 五子棋(无禁手)
