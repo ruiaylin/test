@@ -4,7 +4,7 @@
 ---
 ## 各个压缩包说明
 * es.bz2 - es模板  
-  es的版本是2.4.6，另外有load.sh和plugins(analysis-kuromoji, bigdesk, head, kopf, license, marvel-agent, sql)
+  es的版本是2.4.6，另外有load.sh和plugins(bigdesk, head, kopf, license, marvel-agent, sql)
 * es_stat.bz2 - 统计脚本
 
 ---
