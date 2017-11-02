@@ -16,9 +16,13 @@
 
 —-
 ## 注意事项
+* 注意修改load.sh中host一行中的网卡名称；
+* 注意修改bin/elasticsearch的ES_HEAP_SIZE；
+* 注意修改config/elasticsearch.yml中的path.data & path.logs两个参数；
 * 把es从mac通过rz上传到linux的时候，注意删除”./lib/._lucene-sandbox-5.5.4.jar”一类的无用文件，否则elasticsearch启动时候会报这些问题打不开的error；
 * 创建index的模板可参考[这里](https://github.com/alexstocks/python-practice/blob/master/mysql_redis_es_flume/es/es_test.sh);
 * kibana使用的index中要有一个index字段，类型是date，日志中的时间末尾应该是”+08:00”;
+* 
 
 ---
 * written by Alex Stocks on 2017/04/01
