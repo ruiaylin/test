@@ -13,9 +13,8 @@ echo "Update /etc/hosts"
 cat > /etc/hosts <<EOF
 127.0.0.1       localhost
 ::1 localhost localhost.localdomain localhost6 localhost6.localdomain6
-192.168.100.100 node0
-192.168.100.101 node1
-192.168.100.102 node2
+192.168.10.100 master0
+192.168.10.101 master1
 EOF
 
 echo "Remove unused logs"
@@ -63,7 +62,6 @@ echo "Setup ssh"
 
 # 安装一些常用软件
 install Git git
-install "Base tools" vim wget curl
-install "Hadoop dependencies" expect rsync pssh
+install "Base tools" vim wget curl gdb
 
 echo 'All set, rock on!'
