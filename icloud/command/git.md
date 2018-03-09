@@ -186,6 +186,19 @@ git remote set-url --add --push origin git@1.2.1.1:l/b.git 
 
 ![](../pic/git/repo_storage.png)
 
+上图介绍了如何在工作目录、stage缓存（或者叫索引）、commit历史文件和远程仓库之间进行数据提交以及放弃修改等操作。
+
+* git add files 把工作目录中的文件加入stage缓存
+* git commit 把stage缓存生成一次commit，加入commit历史
+* git reset --  files 撤销最后一次git add，默认情况下git reset撤销所有的stage缓存文件
+* git checkout -- files 把文件从stage缓存复制到工作目录，用来丢弃本地修改
+
+git reset -p/git checkout -p/git add -p 三个命令会进入交互模式进行相关操作。
+
+* git commit -a  相当于运行一次git add把当前目录所有文件加入stage缓存再运行git commit
+* git commit files 进行一次包含最后一次提交加上工作目录中文件快照的提交，且文件被添加到stage缓存
+* git checkout HEAD -- files 会滚到最后一次提交
+
 > git 存储架构与命令操作过程   
 
 ![](../pic/git/repo_storage_command.png)
